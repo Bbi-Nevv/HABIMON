@@ -44,7 +44,7 @@ public class Login : MonoBehaviour
             txtStatus.text = "Đăng nhập thành công!";
             txtStatus.color = Color.green;
 
-            SceneManager.LoadScene("Mission");
+            SceneManager.LoadScene("Parent");
         }
         else
         {

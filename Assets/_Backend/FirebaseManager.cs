@@ -2,6 +2,8 @@
 using Firebase.Auth;
 using Firebase.Firestore;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -111,7 +113,7 @@ public class FirebaseManager : MonoBehaviour
             {
                 email = parent.email,
                 password = parent.password,
-                pincode = null,
+                pincode = HashPin("0000"),
                 createdAt = Timestamp.GetCurrentTimestamp()
             };
             await parentRef.SetAsync(parentData);
@@ -186,6 +188,55 @@ public class FirebaseManager : MonoBehaviour
 
             return (false, ex.Message);
         }
+    }
+    #endregion
+
+    #region Parent PIN
+    public static string HashPin(string pin)
+    {
+        using (SHA256 sha256 = SHA256.Create())
+        {
+            byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(pin));
+            StringBuilder builder = new StringBuilder(bytes.Length * 2);
+
+            foreach (byte value in bytes)
+            {
+                builder.Append(value.ToString("x2"));
+            }
+
+            return builder.ToString();
+        }
+    }
+
+    public async Task<bool> VerifyParentPinAsync(string pin)
+    {
+        if (!IsInitialized || string.IsNullOrEmpty(GetCurrentParentId()))
+            return false;
+
+        DocumentSnapshot snapshot = await db.Collection("users")
+            .Document(GetCurrentParentId())
+            .GetSnapshotAsync();
+
+        if (!snapshot.Exists || !snapshot.ContainsField("pincode"))
+            return false;
+
+        string storedHash = snapshot.GetValue<string>("pincode");
+        return storedHash == HashPin(pin);
+    }
+
+    public async Task<bool> ChangeParentPinAsync(string currentPin, string newPin)
+    {
+        if (!IsInitialized || string.IsNullOrEmpty(GetCurrentParentId()))
+            return false;
+
+        if (!await VerifyParentPinAsync(currentPin))
+            return false;
+
+        await db.Collection("users")
+            .Document(GetCurrentParentId())
+            .UpdateAsync("pincode", HashPin(newPin));
+
+        return true;
     }
     #endregion
 

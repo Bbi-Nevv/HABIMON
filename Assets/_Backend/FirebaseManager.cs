@@ -290,6 +290,30 @@ public class FirebaseManager : MonoBehaviour
         Debug.Log("<color=cyan>[Firebase]</color> Đã thêm thói quen mới thành công!");
     }
 
+    public async Task UpdateHabitActiveAsync(string parentId, string childId, string habitId, bool isActive)
+    {
+        if (!IsInitialized)
+        {
+            Debug.LogWarning("[Firebase] Hệ thống chưa sẵn sàng!");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId) || string.IsNullOrEmpty(habitId))
+        {
+            Debug.LogWarning("[Firebase] Thiếu parentId, childId hoặc habitId để cập nhật trạng thái thói quen.");
+            return;
+        }
+
+        DocumentReference habitRef = db.Collection("users")
+            .Document(parentId)
+            .Collection("children")
+            .Document(childId)
+            .Collection("habits")
+            .Document(habitId);
+
+        await habitRef.UpdateAsync("isActive", isActive);
+    }
+
     public async Task DeleteHabitAsync(string parentId, string childId, string habitId)
     {
         if (!IsInitialized)

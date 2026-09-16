@@ -37,7 +37,7 @@ public class Mission : MonoBehaviour
             rewardExp = 10
         };
 
-        missionUI.SpawnHabitItem(sampleHabit, sampleHabit.id, DeleteHabitById);
+                missionUI.SpawnHabitItem(sampleHabit, sampleHabit.id, DeleteHabitById, UpdateHabitActiveById);
     }
 
     public void AddDataToUi()
@@ -86,7 +86,7 @@ public class Mission : MonoBehaviour
                 foreach (var habit in habits)
                 {
                     Debug.Log($"[Mission] Render habit: {habit.title} | id={habit.id}");
-                    missionUI.SpawnHabitItem(habit, habit.id, DeleteHabitById);
+                    missionUI.SpawnHabitItem(habit, habit.id, DeleteHabitById, UpdateHabitActiveById);
                 }
             }
             else
@@ -136,6 +136,24 @@ public class Mission : MonoBehaviour
     public void DeleteHabitById(string habitId)
     {
         _ = DeleteHabitByIdAsync(habitId);
+    }
+
+    public void UpdateHabitActiveById(string habitId, bool isActive)
+    {
+        _ = UpdateHabitActiveByIdAsync(habitId, isActive);
+    }
+
+    private async Task UpdateHabitActiveByIdAsync(string habitId, bool isActive)
+    {
+        await RefreshCurrentUserContextAsync();
+
+        if (string.IsNullOrEmpty(currentParentId) || string.IsNullOrEmpty(currentChildId) || string.IsNullOrEmpty(habitId))
+        {
+            Debug.LogWarning("[Mission] Không thể cập nhật trạng thái vì thiếu thông tin user/child/habit.");
+            return;
+        }
+
+        await FirebaseManager.Instance.UpdateHabitActiveAsync(currentParentId, currentChildId, habitId, isActive);
     }
 
     public async Task DeleteHabitByIdAsync(string habitId)

@@ -7,7 +7,7 @@ public class AddHabitPopup : MonoBehaviour
     [Header("Popup UI")]
     [SerializeField] private TMP_InputField inputTitle;
     [SerializeField] private TMP_InputField inputDescription;
-    [SerializeField] private TMP_InputField inputTimeTarget;
+    [SerializeField] private TMP_Dropdown dropdownTimeTarget;
     [SerializeField] private Button btnConfirm;
     [SerializeField] private Button btnCancel;
     [SerializeField] private GameObject popupPanel;
@@ -17,6 +17,17 @@ public class AddHabitPopup : MonoBehaviour
 
     private void Start()
     {
+        if (dropdownTimeTarget != null)
+        {
+            dropdownTimeTarget.ClearOptions();
+            dropdownTimeTarget.AddOptions(new System.Collections.Generic.List<string>
+            {
+                "Buổi Sáng",
+                "Buổi Chiều",
+                "Buổi Tối"
+            });
+        }
+
         if (btnConfirm != null)
             btnConfirm.onClick.AddListener(OnConfirmClicked);
 
@@ -49,7 +60,8 @@ public class AddHabitPopup : MonoBehaviour
 
         if (inputTitle != null) inputTitle.text = string.Empty;
         if (inputDescription != null) inputDescription.text = string.Empty;
-        if (inputTimeTarget != null) inputTimeTarget.text = string.Empty;
+        if (dropdownTimeTarget != null)
+            dropdownTimeTarget.value = 0;
     }
 
     private async void OnConfirmClicked()
@@ -62,7 +74,9 @@ public class AddHabitPopup : MonoBehaviour
 
         string title = inputTitle != null ? inputTitle.text.Trim() : string.Empty;
         string description = inputDescription != null ? inputDescription.text.Trim() : string.Empty;
-        string timeTarget = inputTimeTarget != null ? inputTimeTarget.text.Trim() : string.Empty;
+        string timeTarget = dropdownTimeTarget != null && dropdownTimeTarget.options.Count > 0
+            ? dropdownTimeTarget.options[dropdownTimeTarget.value].text
+            : string.Empty;
 
         if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(description) || string.IsNullOrEmpty(timeTarget))
         {

@@ -20,7 +20,7 @@ public class MissionUI : MonoBehaviour
         }
     }
 
-    public void SpawnHabitItem(HabitModel habit, string habitId, Action<string> onDelete = null)
+    public void SpawnHabitItem(HabitModel habit, string habitId, Action<string> onDelete = null, Action<string, bool> onActiveChanged = null)
     {
         if (contentTransform == null || habit == null)
         {
@@ -37,6 +37,17 @@ public class MissionUI : MonoBehaviour
         if (texts.Length > 1)       
             texts[1].text = habit.description;
 
+        Toggle activeToggle = newItem.GetComponentInChildren<Toggle>(true);
+        if (activeToggle != null)
+        {
+            activeToggle.SetIsOnWithoutNotify(habit.isActive);
+            activeToggle.onValueChanged.RemoveAllListeners();
+            activeToggle.onValueChanged.AddListener(isActive =>
+            {
+                habit.isActive = isActive;
+                onActiveChanged?.Invoke(habitId, isActive);
+            });
+        }
 
         Button deleteButton = newItem.transform.Find("Button")?.GetComponent<Button>();
         if (deleteButton != null && !string.IsNullOrEmpty(habitId))

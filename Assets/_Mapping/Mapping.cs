@@ -78,7 +78,9 @@ public class HabitLogModel
 {
     [FirestoreDocumentId] public string logId { get; set; }
     [FirestoreProperty] public string habitId { get; set; }
+    [FirestoreProperty] public string dateKey { get; set; }
     [FirestoreProperty] public Timestamp completedAt { get; set; }
+    [FirestoreProperty] public bool isCompleted { get; set; }
     [FirestoreProperty] public bool isApproved { get; set; }
 }
 #endregion

@@ -357,6 +357,31 @@ public class FirebaseManager : MonoBehaviour
         Debug.Log("<color=cyan>[Firebase]</color> Đã ghi log thói quen thành công!");
     }
 
+    public async Task UpdateHabitLogAsync(string parentId, string childId, string logId, HabitLogModel habitLog)
+    {
+        if (!IsInitialized)
+        {
+            Debug.LogWarning("[Firebase] Hệ thống chưa sẵn sàng!");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId) || string.IsNullOrEmpty(logId))
+        {
+            Debug.LogWarning("[Firebase] Thiếu parentId, childId hoặc logId để cập nhật log thói quen.");
+            return;
+        }
+
+        DocumentReference habitLogRef = db.Collection("users")
+            .Document(parentId)
+            .Collection("children")
+            .Document(childId)
+            .Collection("habit_logs")
+            .Document(logId);
+
+        await habitLogRef.SetAsync(habitLog, SetOptions.MergeAll);
+        Debug.Log("<color=cyan>[Firebase]</color> Đã cập nhật log thói quen thành công!");
+    }
+
     public async Task AddRewardAsync(string parentId, string childId, RewardModel reward)
     {
         if (!IsInitialized)
@@ -425,7 +450,13 @@ public class FirebaseManager : MonoBehaviour
         {
             if (doc.Exists)
             {
-                logs.Add(doc.ConvertTo<HabitLogModel>());
+                HabitLogModel log = doc.ConvertTo<HabitLogModel>();
+                if (log != null)
+                {
+                    log.logId = doc.Id;
+                }
+
+                logs.Add(log);
             }
         }
 

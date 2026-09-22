@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,6 +9,45 @@ public class MissionUI : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private GameObject itemPrefab;
     [SerializeField] private Transform contentTransform;
+    [SerializeField] private List<Sprite> iconSprites;
+
+    private Dictionary<string, Sprite> iconLookup;
+
+    private void Awake()
+    {
+        BuildIconLookup();
+    }
+
+    private void BuildIconLookup()
+    {
+        iconLookup = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+        if (iconSprites == null)
+            return;
+
+        foreach (var sprite in iconSprites)
+        {
+            if (sprite == null)
+                continue;
+
+            if (!iconLookup.ContainsKey(sprite.name))
+                iconLookup[sprite.name] = sprite;
+        }
+    }
+
+    private Sprite GetSpriteByIconKey(string iconKey)
+    {
+        if (string.IsNullOrEmpty(iconKey))
+            return null;
+
+        if (iconLookup == null)
+            BuildIconLookup();
+
+        if (iconLookup != null && iconLookup.TryGetValue(iconKey, out var sprite))
+            return sprite;
+
+        return null;
+    }
 
     public void ClearHabitItems()
     {
@@ -31,11 +71,34 @@ public class MissionUI : MonoBehaviour
         GameObject newItem = Instantiate(itemPrefab, contentTransform);
         TMP_Text[] texts = newItem.GetComponentsInChildren<TMP_Text>(true);
 
+        Image iconImage = newItem.transform.Find("icon")?.GetComponent<Image>();
+        if (iconImage == null)
+            iconImage = newItem.GetComponentInChildren<Image>(true);
+
         if (texts.Length > 0)
             texts[0].text = habit.title;
 
-        if (texts.Length > 1)       
+        if (texts.Length > 1)
             texts[1].text = habit.description;
+
+        if (iconImage != null)
+        {
+            Sprite resolvedSprite = GetSpriteByIconKey(habit.icon);
+            if (resolvedSprite != null)
+            {
+                iconImage.sprite = resolvedSprite;
+            }
+            else
+            {
+                iconImage.sprite = GetSpriteByIconKey("icon_default");
+                if (iconImage.sprite == null)
+                    Debug.LogWarning($"[MissionUI] Không tìm thấy sprite cho iconKey='{habit.icon}' trong iconSprites.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"[MissionUI] Không tìm thấy Image cho habit: {habit.title}");
+        }
 
         Toggle activeToggle = newItem.GetComponentInChildren<Toggle>(true);
         if (activeToggle != null)

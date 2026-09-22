@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,9 +12,32 @@ public class AddHabitPopup : MonoBehaviour
     [SerializeField] private Button btnConfirm;
     [SerializeField] private Button btnCancel;
     [SerializeField] private GameObject popupPanel;
+    [SerializeField] private List<Sprite> habitIcons;
+    [SerializeField] private Image selectedIconImage;
 
     [Header("Target")]
     [SerializeField] private Mission missionTarget;
+
+    private int selectedIconIndex = 0;
+
+    public void SelectIcon(int index)
+    {
+        if (habitIcons == null || habitIcons.Count == 0)
+            return;
+
+        selectedIconIndex = Mathf.Clamp(index, 0, habitIcons.Count - 1);
+
+        if (selectedIconImage != null)
+            selectedIconImage.sprite = habitIcons[selectedIconIndex];
+    }
+
+    public string GetSelectedIconKey()
+    {
+        if (habitIcons == null || habitIcons.Count == 0 || selectedIconIndex < 0 || selectedIconIndex >= habitIcons.Count)
+            return "icon_default";
+
+        return habitIcons[selectedIconIndex].name;
+    }
 
     private void Start()
     {
@@ -27,6 +51,9 @@ public class AddHabitPopup : MonoBehaviour
                 "Buổi Tối"
             });
         }
+
+        if (selectedIconImage != null && habitIcons != null && habitIcons.Count > 0)
+            selectedIconImage.sprite = habitIcons[selectedIconIndex];
 
         if (btnConfirm != null)
             btnConfirm.onClick.AddListener(OnConfirmClicked);
@@ -84,7 +111,9 @@ public class AddHabitPopup : MonoBehaviour
             return;
         }
 
-        await missionTarget.SubmitHabitFromPopup(title, description, timeTarget);
+        string selectedIconKey = GetSelectedIconKey();
+
+        await missionTarget.SubmitHabitFromPopup(title, description, timeTarget, selectedIconKey);
         ClosePopup();
     }
 }

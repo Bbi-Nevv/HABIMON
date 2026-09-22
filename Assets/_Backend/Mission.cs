@@ -100,7 +100,7 @@ public class Mission : MonoBehaviour
         }
     }
 
-    public async Task SubmitHabitFromPopup(string title, string description, string timeTarget)
+    public async Task SubmitHabitFromPopup(string title, string description, string timeTarget, string iconKey = "icon_default")
     {
         await RefreshCurrentUserContextAsync();
 
@@ -116,11 +116,14 @@ public class Mission : MonoBehaviour
             return;
         }
 
+        if (string.IsNullOrEmpty(iconKey))
+            iconKey = "icon_default";
+
         HabitModel habit = new HabitModel
         {
             title = title,
             description = description,
-            icon = "icon_default",
+            icon = iconKey,
             timeTarget = timeTarget,
             repeatDays = new List<int> { 1, 2, 3, 4, 5, 6, 7 },
             rewardGold = 10,

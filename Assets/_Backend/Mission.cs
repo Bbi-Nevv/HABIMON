@@ -13,9 +13,14 @@ public class Mission : MonoBehaviour
 
     private string currentParentId;
     private string currentChildId;
+    private bool hasStarted;
+
+    public bool HasStarted => hasStarted;
 
     private async void Start()
     {
+        hasStarted = true;
+
         if (missionUI == null)
             missionUI = UnityEngine.Object.FindFirstObjectByType<MissionUI>();
 

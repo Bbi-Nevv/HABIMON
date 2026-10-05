@@ -40,7 +40,8 @@ public class ParentModel
 {
     [FirestoreDocumentId] public string parentId { get; set; }
     [FirestoreProperty] public string email { get; set; }
-    [FirestoreProperty] public string password { get; set; }
+    [FirestoreProperty] public string passwordHash { get; set; }
+    [FirestoreProperty] public string passwordSalt { get; set; }
     [FirestoreProperty] public string pincode { get; set; }
     [FirestoreProperty] public Timestamp createdAt { get; set; }
 
@@ -53,6 +54,8 @@ public class ChildModel
 {
     [FirestoreDocumentId] public string childId { get; set; }
     [FirestoreProperty] public string name { get; set; }
+    [FirestoreProperty] public int gender { get; set; }
+    [FirestoreProperty] public int age { get; set; }
     [FirestoreProperty] public int gold { get; set; }
     [FirestoreProperty] public int totalExp { get; set; }
     [FirestoreProperty] public Timestamp createdAt { get; set; }

@@ -1,6 +1,7 @@
 ﻿using Firebase;
 using Firebase.Auth;
 using Firebase.Firestore;
+using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
@@ -60,6 +61,86 @@ public class FirebaseManager : MonoBehaviour
         return currentChildId;
     }
 
+    public async Task<List<ChildModel>> GetChildrenAsync(string parentId)
+    {
+        List<ChildModel> children = new List<ChildModel>();
+
+        if (!IsInitialized || string.IsNullOrEmpty(parentId))
+            return children;
+
+        CollectionReference childrenRef = db.Collection("users")
+            .Document(parentId)
+            .Collection("children");
+
+        QuerySnapshot snapshot = await childrenRef.GetSnapshotAsync();
+        foreach (DocumentSnapshot doc in snapshot.Documents)
+        {
+            if (!doc.Exists)
+                continue;
+
+            ChildModel child = doc.ConvertTo<ChildModel>();
+            if (child != null)
+            {
+                child.childId = doc.Id;
+                if (!doc.ContainsField("gender"))
+                    child.gender = -1;
+                children.Add(child);
+            }
+        }
+
+        return children;
+    }
+
+    public async Task<(bool success, string message)> AddChildAsync(string name, int age, int gender)
+    {
+        if (!IsInitialized)
+            return (false, "Firebase chưa sẵn sàng.");
+
+        string parentId = GetCurrentParentId();
+        if (string.IsNullOrEmpty(parentId))
+            return (false, "Không xác định được phụ huynh đang đăng nhập.");
+
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Vui lòng nhập tên trẻ.");
+
+        if (age <= 0)
+            return (false, "Tuổi phải lớn hơn 0.");
+
+        if (gender != 0 && gender != 1)
+            return (false, "Vui lòng chọn giới tính.");
+
+        string childId = Guid.NewGuid().ToString();
+        DocumentReference childRef = db.Collection("users")
+            .Document(parentId)
+            .Collection("children")
+            .Document(childId);
+
+        ChildModel child = new ChildModel
+        {
+            childId = childId,
+            name = name.Trim(),
+            age = age,
+            gender = gender,
+            gold = 0,
+            totalExp = 0,
+            createdAt = Timestamp.GetCurrentTimestamp()
+        };
+
+        try
+        {
+            await childRef.SetAsync(child);
+            if (string.IsNullOrEmpty(currentChildId))
+                currentChildId = childId;
+
+            return (true, "Đã thêm trẻ.");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Firebase] Không thể thêm trẻ: {ex.Message}");
+            return (false, "Không thể thêm trẻ. Vui lòng thử lại.");
+        }
+    }
+
     private void Awake()
     {
         if (Instance == null)
@@ -87,14 +168,14 @@ public class FirebaseManager : MonoBehaviour
 
     #region Register New Account
     // --- HÀM ĐĂNG KÝ TÀI KHOẢN MỚI ---
-    public async Task<(bool success, string message)> RegisterParentAsync(ParentModel parent)
+    public async Task<(bool success, string message)> RegisterParentAsync(string email, string password)
     {
         if (!IsInitialized) return (false, "Hệ thống chưa sẵn sàng!");
 
         try
         {
             // 1. Tạo tài khoản trên Firebase Auth
-            AuthResult result = await auth.CreateUserWithEmailAndPasswordAsync(parent.email, parent.password);
+            AuthResult result = await auth.CreateUserWithEmailAndPasswordAsync(email, password);
             FirebaseUser newUser = result.User;
             string parentId = newUser.UserId;
             if (parentId != null)
@@ -108,11 +189,16 @@ public class FirebaseManager : MonoBehaviour
             }
 
             // 2. Tạo thông tin Phụ huynh trên Firestore
+            // Lưu password dưới dạng hash + salt thay vì plain text để tránh rò rỉ dữ liệu nhạy cảm.
+            string passwordSalt = GenerateSalt();
+            string passwordHash = HashPassword(password, passwordSalt);
+
             DocumentReference parentRef = db.Collection("users").Document(parentId);
             ParentModel parentData = new ParentModel
             {
-                email = parent.email,
-                password = parent.password,
+                email = email.Trim(),
+                passwordHash = passwordHash,
+                passwordSalt = passwordSalt,
                 pincode = HashPin("0000"),
                 createdAt = Timestamp.GetCurrentTimestamp()
             };
@@ -124,7 +210,9 @@ public class FirebaseManager : MonoBehaviour
             ChildModel childData = new ChildModel
             {
                 childId = childId,
-                name = null,
+                name = "Unnull",
+                gender = 1,
+                age = 0,
                 gold = 0,
                 totalExp = 0,
                 createdAt = Timestamp.GetCurrentTimestamp()
@@ -208,6 +296,45 @@ public class FirebaseManager : MonoBehaviour
         }
     }
 
+    public static string GenerateSalt()
+    {
+        byte[] saltBytes = new byte[16];
+        using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(saltBytes);
+        }
+
+        return Convert.ToBase64String(saltBytes);
+    }
+
+    public static string HashPassword(string password, string salt)
+    {
+        if (string.IsNullOrEmpty(password))
+            return string.Empty;
+
+        string combined = password + salt;
+        using (SHA256 sha256 = SHA256.Create())
+        {
+            byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(combined));
+            StringBuilder builder = new StringBuilder(bytes.Length * 2);
+
+            foreach (byte value in bytes)
+            {
+                builder.Append(value.ToString("x2"));
+            }
+
+            return builder.ToString();
+        }
+    }
+
+    public static bool VerifyPassword(string password, string storedHash, string storedSalt)
+    {
+        if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
+            return false;
+
+        return HashPassword(password, storedSalt) == storedHash;
+    }
+
     public async Task<bool> VerifyParentPinAsync(string pin)
     {
         if (!IsInitialized || string.IsNullOrEmpty(GetCurrentParentId()))
@@ -255,6 +382,31 @@ public class FirebaseManager : MonoBehaviour
         {
             Debug.LogWarning("Tài khoản chưa tồn tại");
             return (false, "Tài khoản chưa tồn tại");
+        }
+    }
+
+    public async Task<(bool success, string message)> SendPasswordResetEmailAsync(string email)
+    {
+        if (!IsInitialized) return (false, "Hệ thống chưa sẵn sàng!");
+
+        if (string.IsNullOrWhiteSpace(email))
+            return (false, "Vui lòng nhập email.");
+
+        try
+        {
+            await auth.SendPasswordResetEmailAsync(email);
+            return (true, "Email đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra hộp thư.");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[Firebase Reset Password] {ex.Message}");
+
+            if (ex is FirebaseException fbEx)
+            {
+                return (false, fbEx.Message);
+            }
+
+            return (false, ex.Message);
         }
     }
     #endregion

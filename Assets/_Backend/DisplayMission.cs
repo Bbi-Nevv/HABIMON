@@ -17,6 +17,9 @@ public class DisplayMission : MonoBehaviour
 
     private readonly List<HabitModel> allHabits = new List<HabitModel>();
     private string currentPeriod = "Buổi Sáng";
+    private string loadedParentId = string.Empty;
+    private string loadedChildId = string.Empty;
+    private int habitLoadVersion;
 
     private void Start()
     {
@@ -51,12 +54,7 @@ public class DisplayMission : MonoBehaviour
         }
 
         string parentId = FirebaseManager.Instance.GetCurrentParentId();
-        string childId = FirebaseManager.Instance.GetCurrentChildId();
-
-        if (string.IsNullOrEmpty(childId))
-        {
-            childId = await FirebaseManager.Instance.ResolveCurrentChildIdAsync();
-        }
+        string childId = await FirebaseManager.Instance.ResolveCurrentChildIdAsync();
 
         if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId))
         {
@@ -64,9 +62,34 @@ public class DisplayMission : MonoBehaviour
             return;
         }
 
+        await LoadHabitsForChildAsync(childId);
+    }
+
+    public async Task LoadHabitsForChildAsync(string childId)
+    {
+        int requestVersion = ++habitLoadVersion;
+
+        if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+        {
+            Debug.LogWarning("[DisplayMission] Firebase chưa sẵn sàng.");
+            return;
+        }
+
+        string parentId = FirebaseManager.Instance.GetCurrentParentId();
+        if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId))
+        {
+            Debug.LogWarning("[DisplayMission] Thiếu ParentId hoặc ChildId để tải nhiệm vụ.");
+            return;
+        }
+
         var habits = await FirebaseManager.Instance.GetHabitsAsync(parentId, childId);
+        if (requestVersion != habitLoadVersion)
+            return;
+
         allHabits.Clear();
         allHabits.AddRange(habits.Where(h => h != null));
+        loadedParentId = parentId;
+        loadedChildId = childId;
 
         ShowByPeriod(currentPeriod);
     }
@@ -93,7 +116,7 @@ public class DisplayMission : MonoBehaviour
             if (!MatchesPeriod(habit.timeTarget, period))
                 continue;
 
-            SpawnItem(habit);
+            SpawnItem(habit, loadedParentId, loadedChildId);
         }
     }
 
@@ -134,7 +157,7 @@ public class DisplayMission : MonoBehaviour
         }
     }
 
-    private void SpawnItem(HabitModel habit)
+    private void SpawnItem(HabitModel habit, string parentId, string childId)
     {
         GameObject item = Instantiate(itemPrefab, contentRoot);
 
@@ -179,14 +202,6 @@ public class DisplayMission : MonoBehaviour
 
         if (toggle != null)
         {
-            string parentId = FirebaseManager.Instance != null ? FirebaseManager.Instance.GetCurrentParentId() : string.Empty;
-            string childId = FirebaseManager.Instance != null ? FirebaseManager.Instance.GetCurrentChildId() : string.Empty;
-
-            if (string.IsNullOrEmpty(childId) && FirebaseManager.Instance != null)
-            {
-                childId = FirebaseManager.Instance.ResolveCurrentChildIdAsync().GetAwaiter().GetResult();
-            }
-
             if (!string.IsNullOrEmpty(parentId) && !string.IsNullOrEmpty(childId) && !string.IsNullOrEmpty(habit.id))
             {
                 _ = ApplyToggleStateAsync(toggle, statusText, parentId, childId, habit);

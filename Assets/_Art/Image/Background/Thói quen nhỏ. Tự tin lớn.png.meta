@@ -1,0 +1,806 @@
+fileFormatVersion: 2
+guid: 404e7305d54371c42966b2ca61b4dbd5
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -8083349299231210605
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_0"
+  - first:
+      213: -2790447639889272949
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_1"
+  - first:
+      213: -4139895358665313696
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_2"
+  - first:
+      213: -1784577316818012432
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_3"
+  - first:
+      213: 243929644732083684
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_4"
+  - first:
+      213: 8298313142721475012
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_5"
+  - first:
+      213: 8818094025490166421
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_6"
+  - first:
+      213: 2304871955680185755
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_7"
+  - first:
+      213: 7112776683536755293
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_8"
+  - first:
+      213: -8400441655158305447
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_9"
+  - first:
+      213: -3533498966825419943
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_10"
+  - first:
+      213: -2043681642042449883
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_11"
+  - first:
+      213: -8209169341890862205
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_12"
+  - first:
+      213: -8810110796267928119
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_13"
+  - first:
+      213: 5235129762838447931
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_14"
+  - first:
+      213: -2640173305434326860
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_15"
+  - first:
+      213: -5471252851296625388
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_16"
+  - first:
+      213: -9007452942621565072
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_17"
+  - first:
+      213: -3367065478171879397
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_18"
+  - first:
+      213: 7886112354226160684
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_19"
+  - first:
+      213: -8261582739686650640
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_20"
+  - first:
+      213: 8848412607971830984
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_21"
+  - first:
+      213: -8812905893413690586
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_22"
+  - first:
+      213: -1879571427898897404
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_23"
+  - first:
+      213: 3021506522929060486
+    second: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_24"
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 0
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 1
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: iOS
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_0"
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 4
+        width: 16
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 393cbe7c3ac22df80800000000000000
+      internalID: -8083349299231210605
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_1"
+      rect:
+        serializedVersion: 2
+        x: 15
+        y: 4
+        width: 14
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b8f921ce7a65649d0800000000000000
+      internalID: -2790447639889272949
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_2"
+      rect:
+        serializedVersion: 2
+        x: 28
+        y: 4
+        width: 16
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 062377bfa132c86c0800000000000000
+      internalID: -4139895358665313696
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_3"
+      rect:
+        serializedVersion: 2
+        x: 33
+        y: 18
+        width: 9
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0f6b7dca268eb37e0800000000000000
+      internalID: -1784577316818012432
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_4"
+      rect:
+        serializedVersion: 2
+        x: 43
+        y: 18
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4ed617038bc926300800000000000000
+      internalID: 243929644732083684
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_5"
+      rect:
+        serializedVersion: 2
+        x: 43
+        y: 4
+        width: 6
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4c17ed246d7892370800000000000000
+      internalID: 8298313142721475012
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_6"
+      rect:
+        serializedVersion: 2
+        x: 55
+        y: 0
+        width: 15
+        height: 19
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 592f551cbc9206a70800000000000000
+      internalID: 8818094025490166421
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_7"
+      rect:
+        serializedVersion: 2
+        x: 70
+        y: 4
+        width: 14
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b9dc31bf4dc8cff10800000000000000
+      internalID: 2304871955680185755
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_8"
+      rect:
+        serializedVersion: 2
+        x: 84
+        y: 4
+        width: 14
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d5aa3e465b8a5b260800000000000000
+      internalID: 7112776683536755293
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_9"
+      rect:
+        serializedVersion: 2
+        x: 97
+        y: 4
+        width: 15
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 95d05e372d2ab6b80800000000000000
+      internalID: -8400441655158305447
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_10"
+      rect:
+        serializedVersion: 2
+        x: 118
+        y: 4
+        width: 14
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 95b3924396d76fec0800000000000000
+      internalID: -3533498966825419943
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_11"
+      rect:
+        serializedVersion: 2
+        x: 132
+        y: 4
+        width: 14
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 520a21cdf5263a3e0800000000000000
+      internalID: -2043681642042449883
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_12"
+      rect:
+        serializedVersion: 2
+        x: 146
+        y: 4
+        width: 15
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 38361934afb231e80800000000000000
+      internalID: -8209169341890862205
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_13"
+      rect:
+        serializedVersion: 2
+        x: 149
+        y: 18
+        width: 9
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9c5cd94a8e23cb580800000000000000
+      internalID: -8810110796267928119
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_14"
+      rect:
+        serializedVersion: 2
+        x: 171
+        y: 4
+        width: 18
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b378f0b48cae6a840800000000000000
+      internalID: 5235129762838447931
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_15"
+      rect:
+        serializedVersion: 2
+        x: 186
+        y: 4
+        width: 17
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4b83e10fd583c5bd0800000000000000
+      internalID: -2640173305434326860
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_16"
+      rect:
+        serializedVersion: 2
+        x: 205
+        y: 4
+        width: 12
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 41d1f1a05843214b0800000000000000
+      internalID: -5471252851296625388
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_17"
+      rect:
+        serializedVersion: 2
+        x: 216
+        y: 18
+        width: 7
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 07f9effa5491ff280800000000000000
+      internalID: -9007452942621565072
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_18"
+      rect:
+        serializedVersion: 2
+        x: 216
+        y: 4
+        width: 6
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b18951e79c7c541d0800000000000000
+      internalID: -3367065478171879397
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_19"
+      rect:
+        serializedVersion: 2
+        x: 222
+        y: 4
+        width: 15
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c24487c5769117d60800000000000000
+      internalID: 7886112354226160684
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_20"
+      rect:
+        serializedVersion: 2
+        x: 243
+        y: 4
+        width: 23
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0fc8a7e1546f85d80800000000000000
+      internalID: -8261582739686650640
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_21"
+      rect:
+        serializedVersion: 2
+        x: 265
+        y: 4
+        width: 14
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8ccaf34d260ebca70800000000000000
+      internalID: 8848412607971830984
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_22"
+      rect:
+        serializedVersion: 2
+        x: 160
+        y: 4
+        width: 6
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 623612068c442b580800000000000000
+      internalID: -8812905893413690586
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_23"
+      rect:
+        serializedVersion: 2
+        x: 190
+        y: 0
+        width: 6
+        height: 5
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 40ccc16aebb6ae5e0800000000000000
+      internalID: -1879571427898897404
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_24"
+      rect:
+        serializedVersion: 2
+        x: 279
+        y: 4
+        width: 5
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 68a56b98c2c8ee920800000000000000
+      internalID: 3021506522929060486
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_0": -8083349299231210605
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_1": -2790447639889272949
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_10": -3533498966825419943
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_11": -2043681642042449883
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_12": -8209169341890862205
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_13": -8810110796267928119
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_14": 5235129762838447931
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_15": -2640173305434326860
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_16": -5471252851296625388
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_17": -9007452942621565072
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_18": -3367065478171879397
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_19": 7886112354226160684
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_2": -4139895358665313696
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_20": -8261582739686650640
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_21": 8848412607971830984
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_22": -8812905893413690586
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_23": -1879571427898897404
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_24": 3021506522929060486
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_3": -1784577316818012432
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_4": 243929644732083684
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_5": 8298313142721475012
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_6": 8818094025490166421
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_7": 2304871955680185755
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_8": 7112776683536755293
+      "Th\xF3i quen nh\u1ECF. T\u1EF1 tin l\u1EDBn_9": -8400441655158305447
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

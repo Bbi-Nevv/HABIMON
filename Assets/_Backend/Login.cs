@@ -2,6 +2,7 @@
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using System;
 
 public class Login : MonoBehaviour
 {
@@ -11,8 +12,13 @@ public class Login : MonoBehaviour
     [SerializeField] private Button btnLogin;
     [SerializeField] private TMP_Text txtStatus;
 
+    [Header("GameObject")]
+    [SerializeField] private GameObject mode;
+    [SerializeField] private GameObject login;
+
     private void Start()
     {
+        mode.SetActive(false);
         txtStatus.text = string.Empty;
         if (btnLogin != null)
         {
@@ -44,7 +50,10 @@ public class Login : MonoBehaviour
             txtStatus.text = "Đăng nhập thành công!";
             txtStatus.color = Color.green;
 
-            SceneManager.LoadScene("Parent");
+            // SceneManager.LoadScene("Parent");
+            mode.SetActive(true);
+            login.SetActive(false);
+
         }
         else
         {

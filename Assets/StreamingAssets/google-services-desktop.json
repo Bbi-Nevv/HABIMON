@@ -12,7 +12,20 @@
           "package_name": "com.GSAM.HABIMON"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "350279351530-qcocblapspv3o70ol58c1tr7mcvvqmrm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.GSAM.HABIMON",
+            "certificate_hash": "c30d096eec731ee8791b3e111fa03ecfcf1e4dd3"
+          }
+        },
+        {
+          "client_id": "350279351530-qrjcdlagivdbtuae2rr0bnaqlcprnkkj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBDgeXxy6A4TiqKHPxcqncDWhlRtNnv3A8"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "350279351530-qrjcdlagivdbtuae2rr0bnaqlcprnkkj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "350279351530-kqtsellt05dffnthcgv2t79sh4macdnu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.GSAM.HABIMON"
+              }
+            }
+          ]
         }
       }
     }

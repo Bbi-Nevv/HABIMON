@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
-using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -16,6 +15,7 @@ public class FirebaseManager : MonoBehaviour
 
     private FirebaseAuth auth;
     private FirebaseFirestore db;
+    private ChildService childService;
 
     public FirebaseUser CurrentUser => auth?.CurrentUser;
     public bool IsInitialized { get; private set; } = false;
@@ -44,51 +44,16 @@ public class FirebaseManager : MonoBehaviour
         if (string.IsNullOrEmpty(parentId) || !IsInitialized)
             return string.Empty;
 
-        CollectionReference childrenRef = db.Collection("users")
-            .Document(parentId)
-            .Collection("children");
-
-        QuerySnapshot snapshot = await childrenRef.GetSnapshotAsync();
-        var firstChild = snapshot.Documents.FirstOrDefault();
-
-        if (firstChild == null || !firstChild.Exists)
-        {
-            currentChildId = string.Empty;
-            return string.Empty;
-        }
-
-        currentChildId = firstChild.Id;
+        currentChildId = await childService.ResolveCurrentChildIdAsync(parentId);
         return currentChildId;
     }
 
     public async Task<List<ChildModel>> GetChildrenAsync(string parentId)
     {
-        List<ChildModel> children = new List<ChildModel>();
-
         if (!IsInitialized || string.IsNullOrEmpty(parentId))
-            return children;
+            return new List<ChildModel>();
 
-        CollectionReference childrenRef = db.Collection("users")
-            .Document(parentId)
-            .Collection("children");
-
-        QuerySnapshot snapshot = await childrenRef.GetSnapshotAsync();
-        foreach (DocumentSnapshot doc in snapshot.Documents)
-        {
-            if (!doc.Exists)
-                continue;
-
-            ChildModel child = doc.ConvertTo<ChildModel>();
-            if (child != null)
-            {
-                child.childId = doc.Id;
-                if (!doc.ContainsField("gender"))
-                    child.gender = -1;
-                children.Add(child);
-            }
-        }
-
-        return children;
+        return await childService.GetChildrenAsync(parentId);
     }
 
     public async Task<(bool success, string message)> AddChildAsync(string name, int age, int gender)
@@ -100,45 +65,11 @@ public class FirebaseManager : MonoBehaviour
         if (string.IsNullOrEmpty(parentId))
             return (false, "Không xác định được phụ huynh đang đăng nhập.");
 
-        if (string.IsNullOrWhiteSpace(name))
-            return (false, "Vui lòng nhập tên trẻ.");
+        var result = await childService.AddChildAsync(parentId, name, age, gender);
+        if (result.success && string.IsNullOrEmpty(currentChildId))
+            currentChildId = result.childId;
 
-        if (age <= 0)
-            return (false, "Tuổi phải lớn hơn 0.");
-
-        if (gender != 0 && gender != 1)
-            return (false, "Vui lòng chọn giới tính.");
-
-        string childId = Guid.NewGuid().ToString();
-        DocumentReference childRef = db.Collection("users")
-            .Document(parentId)
-            .Collection("children")
-            .Document(childId);
-
-        ChildModel child = new ChildModel
-        {
-            childId = childId,
-            name = name.Trim(),
-            age = age,
-            gender = gender,
-            gold = 0,
-            totalExp = 0,
-            createdAt = Timestamp.GetCurrentTimestamp()
-        };
-
-        try
-        {
-            await childRef.SetAsync(child);
-            if (string.IsNullOrEmpty(currentChildId))
-                currentChildId = childId;
-
-            return (true, "Đã thêm trẻ.");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[Firebase] Không thể thêm trẻ: {ex.Message}");
-            return (false, "Không thể thêm trẻ. Vui lòng thử lại.");
-        }
+        return (result.success, result.message);
     }
 
     private void Awake()
@@ -160,6 +91,7 @@ public class FirebaseManager : MonoBehaviour
         {
             auth = FirebaseAuth.DefaultInstance;
             db = FirebaseFirestore.DefaultInstance;
+            childService = new ChildService(db);
             IsInitialized = true;
             Debug.Log("<color=green>[Firebase]</color> Khởi tạo Auth & Firestore thành công!");
         }
@@ -383,6 +315,114 @@ public class FirebaseManager : MonoBehaviour
             Debug.LogWarning("Tài khoản chưa tồn tại");
             return (false, "Tài khoản chưa tồn tại");
         }
+    }
+
+    public async Task<(bool success, string message)> LoginWithGoogleAsync()
+    {
+        if (!IsInitialized) return (false, "Hệ thống chưa sẵn sàng!");
+
+        string stage = "Mở Firebase Google OAuth";
+        try
+        {
+            FederatedOAuthProviderData providerData = new FederatedOAuthProviderData
+            {
+                ProviderId = GoogleAuthProvider.ProviderId
+            };
+            FederatedOAuthProvider provider = new FederatedOAuthProvider(providerData);
+            await auth.SignInWithProviderAsync(provider);
+
+            stage = "Tạo hồ sơ Google trên Firestore";
+            FirebaseUser user = auth.CurrentUser;
+            await EnsureGoogleParentDataAsync(user, user?.Email);
+
+            stage = "Đọc hồ sơ trẻ trên Firestore";
+            await ResolveCurrentChildIdAsync();
+            return (true, "Đăng nhập Google thành công!");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Google Auth] Thất bại tại bước '{stage}'.\n{ex}");
+            if (ex is FirebaseException fbEx)
+                return (false, $"Lỗi Firebase tại bước '{stage}' ({fbEx.ErrorCode}): {fbEx.Message}");
+
+            return (false, $"Lỗi tại bước '{stage}': {ex.Message}");
+        }
+    }
+
+    private async Task EnsureGoogleParentDataAsync(FirebaseUser user, string email)
+    {
+        if (user == null)
+            throw new InvalidOperationException("Không lấy được Firebase user sau khi đăng nhập Google.");
+
+        DocumentReference parentRef = db.Collection("users").Document(user.UserId);
+        DocumentSnapshot parentSnapshot = await parentRef.GetSnapshotAsync();
+        if (!parentSnapshot.Exists)
+        {
+            ParentModel parentData = new ParentModel
+            {
+                email = string.IsNullOrWhiteSpace(email) ? user.Email : email.Trim(),
+                passwordHash = string.Empty,
+                passwordSalt = string.Empty,
+                pincode = HashPin("0000"),
+                createdAt = Timestamp.GetCurrentTimestamp()
+            };
+            await parentRef.SetAsync(parentData);
+        }
+
+        CollectionReference childrenRef = parentRef.Collection("children");
+        QuerySnapshot children = await childrenRef.GetSnapshotAsync();
+        if (children.Count > 0)
+            return;
+
+        string childId = Guid.NewGuid().ToString();
+        DocumentReference childRef = childrenRef.Document(childId);
+        ChildModel childData = new ChildModel
+        {
+            childId = childId,
+            name = "Unnull",
+            gender = 1,
+            age = 0,
+            gold = 0,
+            totalExp = 0,
+            createdAt = Timestamp.GetCurrentTimestamp()
+        };
+        await childRef.SetAsync(childData);
+        currentChildId = childId;
+
+        await childRef.Collection("habimon").Document("status").SetAsync(new HabimonModel
+        {
+            petType = "fire_dragon",
+            petName = "Rồng Lửa",
+            level = 1,
+            currentExp = 0,
+            maxExp = 100,
+            stage = "Egg",
+            health = 100,
+            hunger = 100,
+            happiness = 100
+        });
+
+        await childRef.Collection("habits").Document("habit_001").SetAsync(new HabitModel
+        {
+            title = "Đọc sách 15 phút",
+            description = "Đọc truyện hoặc sách khoa học trước khi đi ngủ",
+            icon = "icon_book",
+            timeTarget = "20:00",
+            repeatDays = new List<int> { 1, 2, 3, 4, 5 },
+            rewardGold = 15,
+            rewardExp = 25,
+            requireApproval = true,
+            isActive = true
+        });
+
+        await childRef.Collection("rewards").Document("reward_01").SetAsync(new RewardModel
+        {
+            name = "Móc khóa thú cưng",
+            itemType = "item",
+            cost = 50,
+            isUnlocked = false,
+            createdAt = Timestamp.GetCurrentTimestamp()
+        });
     }
 
     public async Task<(bool success, string message)> SendPasswordResetEmailAsync(string email)

@@ -77,7 +77,7 @@ public class Childrent : MonoBehaviour
             texts[1].text = $"{age}, {gender}";
         }
 
-        Image childImage = item.transform.Find("image")?.GetComponent<Image>();
+        Image childImage = item.transform.Find("Image")?.GetComponentInChildren<Image>();
         if (childImage != null && genderSprites != null && child.gender >= 0 && child.gender < genderSprites.Length && genderSprites[child.gender] != null)
         {
             childImage.sprite = genderSprites[child.gender];

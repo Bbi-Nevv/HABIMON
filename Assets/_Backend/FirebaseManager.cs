@@ -72,6 +72,26 @@ public class FirebaseManager : MonoBehaviour
         return (result.success, result.message);
     }
 
+    public async Task<(bool success, string message)> UpdateChildAsync(string childId, string name, int age, int gender)
+    {
+        if (!IsInitialized)
+            return (false, "Firebase chưa sẵn sàng.");
+
+        return await childService.UpdateChildAsync(GetCurrentParentId(), childId, name, age, gender);
+    }
+
+    public async Task<(bool success, string message)> DeleteChildAsync(string childId)
+    {
+        if (!IsInitialized)
+            return (false, "Firebase chưa sẵn sàng.");
+
+        var result = await childService.DeleteChildAsync(GetCurrentParentId(), childId);
+        if (result.success && currentChildId == childId)
+            currentChildId = string.Empty;
+
+        return result;
+    }
+
     private void Awake()
     {
         if (Instance == null)

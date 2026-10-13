@@ -57,6 +57,71 @@ public class ChildService
         return children;
     }
 
+    public async Task<(bool success, string message)> UpdateChildAsync(string parentId, string childId, string name, int age, int gender)
+    {
+        if (string.IsNullOrWhiteSpace(parentId))
+            return (false, "Không xác định được phụ huynh đang đăng nhập.");
+
+        if (string.IsNullOrWhiteSpace(childId))
+            return (false, "Không xác định được trẻ cần cập nhật.");
+
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Vui lòng nhập tên trẻ.");
+
+        if (age <= 0)
+            return (false, "Tuổi phải lớn hơn 0.");
+
+        if (gender != 0 && gender != 1)
+            return (false, "Vui lòng chọn giới tính.");
+
+        try
+        {
+            DocumentReference childRef = db.Collection("users")
+                .Document(parentId)
+                .Collection("children")
+                .Document(childId);
+
+            await childRef.UpdateAsync(new Dictionary<string, object>
+            {
+                { "name", name.Trim() },
+                { "age", age },
+                { "gender", gender }
+            });
+
+            return (true, "Đã cập nhật thông tin trẻ.");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Firebase] Không thể cập nhật trẻ: {ex.Message}");
+            return (false, "Không thể cập nhật trẻ. Vui lòng thử lại.");
+        }
+    }
+
+    public async Task<(bool success, string message)> DeleteChildAsync(string parentId, string childId)
+    {
+        if (string.IsNullOrWhiteSpace(parentId))
+            return (false, "Không xác định được phụ huynh đang đăng nhập.");
+
+        if (string.IsNullOrWhiteSpace(childId))
+            return (false, "Không xác định được trẻ cần xóa.");
+
+        try
+        {
+            DocumentReference childRef = db.Collection("users")
+                .Document(parentId)
+                .Collection("children")
+                .Document(childId);
+
+            await childRef.DeleteAsync();
+            return (true, "Đã xóa trẻ.");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Firebase] Không thể xóa trẻ: {ex.Message}");
+            return (false, "Không thể xóa trẻ. Vui lòng thử lại.");
+        }
+    }
+
     public async Task<(bool success, string message, string childId)> AddChildAsync(string parentId, string name, int age, int gender)
     {
         if (string.IsNullOrEmpty(parentId))

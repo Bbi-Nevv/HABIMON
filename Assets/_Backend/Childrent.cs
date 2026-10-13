@@ -12,12 +12,16 @@ public class Childrent : MonoBehaviour
     [SerializeField] private Transform contentTransform;
     [SerializeField] private Sprite[] genderSprites = new Sprite[2];
     [SerializeField] private AddHabitPopup addHabitPopup;
+    [SerializeField] private UpdateChild updateChildPopup;
     [SerializeField] private GameObject Mission;
 
     private async void Start()
     {
         if (addHabitPopup == null)
             addHabitPopup = FindFirstObjectByType<AddHabitPopup>();
+
+        if (updateChildPopup == null)
+            updateChildPopup = FindFirstObjectByType<UpdateChild>(FindObjectsInactive.Include);
 
         await LoadChildrenAsync();
     }
@@ -83,6 +87,29 @@ public class Childrent : MonoBehaviour
             childImage.sprite = genderSprites[child.gender];
         }
 
+        if (updateChildPopup != null && !string.IsNullOrEmpty(child.childId))
+        {
+            Button editButton = item.transform.Find("EditButton")?.GetComponent<Button>();
+            if (editButton == null)
+                editButton = CreateActionButton(item.transform, texts.Length > 0 ? texts[0] : null,
+                    "EditButton", "Sửa", -84f, new Color(0.85f, 0.9f, 1f));
+
+            // Use a fresh event so an Inspector callback cannot open a different child.
+            editButton.onClick = new Button.ButtonClickedEvent();
+            editButton.onClick.AddListener(() => updateChildPopup.OpenPopup(child));
+        }
+
+        if (!string.IsNullOrEmpty(child.childId))
+        {
+            Button deleteButton = item.transform.Find("DeleteButton")?.GetComponent<Button>();
+            if (deleteButton == null)
+                deleteButton = CreateActionButton(item.transform, texts.Length > 0 ? texts[0] : null,
+                    "DeleteButton", "Xóa", -12f, new Color(1f, 0.85f, 0.85f));
+
+            deleteButton.onClick = new Button.ButtonClickedEvent();
+            deleteButton.onClick.AddListener(() => OnDeleteChildClicked(child, item, firebaseManager));
+        }
+
         Button button = item.GetComponent<Button>();
         if (button != null && !string.IsNullOrEmpty(child.childId))
         {
@@ -107,5 +134,78 @@ public class Childrent : MonoBehaviour
                 //     Debug.LogWarning("[Childrent] Chưa tìm thấy AddHabitPopup.");
             });
         }
+    }
+
+    private async void OnDeleteChildClicked(ChildModel child, GameObject item, FirebaseManager firebaseManager)
+    {
+        Button[] buttons = item.GetComponentsInChildren<Button>(true);
+        foreach (Button button in buttons)
+            button.interactable = false;
+
+        try
+        {
+            bool wasCurrentChild = firebaseManager.GetCurrentChildId() == child.childId;
+            var (success, message) = await firebaseManager.DeleteChildAsync(child.childId);
+            if (!success)
+            {
+                Debug.LogWarning($"[Childrent] {message}");
+                return;
+            }
+
+            if (wasCurrentChild && string.IsNullOrEmpty(firebaseManager.GetCurrentChildId()) && Mission != null)
+                Mission.SetActive(false);
+
+            if (this != null)
+                await LoadChildrenAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Childrent] Không thể hoàn tất xóa trẻ: {ex.Message}");
+        }
+        finally
+        {
+            foreach (Button button in buttons)
+            {
+                if (button != null)
+                    button.interactable = true;
+            }
+        }
+    }
+
+    private Button CreateActionButton(Transform parent, TMP_Text sourceText,
+        string objectName, string caption, float positionX, Color color)
+    {
+        GameObject editObject = new GameObject(objectName, typeof(RectTransform), typeof(Image), typeof(Button));
+        editObject.layer = parent.gameObject.layer;
+        editObject.transform.SetParent(parent, false);
+
+        RectTransform rect = editObject.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(1f, 0.5f);
+        rect.pivot = new Vector2(1f, 0.5f);
+        rect.anchoredPosition = new Vector2(positionX, 0f);
+        rect.sizeDelta = new Vector2(64f, 36f);
+
+        Image image = editObject.GetComponent<Image>();
+        image.color = color;
+        Button button = editObject.GetComponent<Button>();
+        button.targetGraphic = image;
+
+        GameObject labelObject = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        labelObject.layer = editObject.layer;
+        labelObject.transform.SetParent(editObject.transform, false);
+        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = labelRect.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI label = labelObject.GetComponent<TextMeshProUGUI>();
+        if (sourceText != null)
+            label.font = sourceText.font;
+        label.text = caption;
+        label.fontSize = 18f;
+        label.color = Color.black;
+        label.alignment = TextAlignmentOptions.Center;
+        label.raycastTarget = false;
+        return button;
     }
 }

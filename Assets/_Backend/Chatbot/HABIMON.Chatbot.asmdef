@@ -1,0 +1,14 @@
+{
+  "name": "HABIMON.Chatbot",
+  "rootNamespace": "HABIMON.Chatbot",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

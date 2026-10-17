@@ -1,0 +1,20 @@
+{
+  "name": "HABIMON.Chatbot.Tests",
+  "rootNamespace": "HABIMON.Chatbot.Tests",
+  "references": [
+    "HABIMON.Chatbot"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

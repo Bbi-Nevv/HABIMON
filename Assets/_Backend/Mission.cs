@@ -36,7 +36,7 @@ public class Mission : MonoBehaviour
         var sampleHabit = new HabitModel
         {
             title = "Thói quen mới",
-            description = "Mô tả thử nghiệm",
+            description = "",
             timeTarget = "21:00",
             rewardGold = 5,
             rewardExp = 10
@@ -115,14 +115,15 @@ public class Mission : MonoBehaviour
             return;
         }
 
-        if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(description) || string.IsNullOrEmpty(timeTarget))
+        // if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(description) || string.IsNullOrEmpty(timeTarget))
+        if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(timeTarget))
         {
             Debug.LogWarning("[Mission] Tên, mô tả và giờ cần được nhập đầy đủ.");
             return;
         }
 
         if (string.IsNullOrEmpty(iconKey))
-            iconKey = "icon_default";
+            iconKey = "cleanuptoys 1";
 
         HabitModel habit = new HabitModel
         {

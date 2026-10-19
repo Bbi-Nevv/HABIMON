@@ -3,6 +3,7 @@ using Firebase.Auth;
 using Firebase.Firestore;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -54,6 +55,15 @@ public class FirebaseManager : MonoBehaviour
             return new List<ChildModel>();
 
         return await childService.GetChildrenAsync(parentId);
+    }
+
+    public ListenerRegistration ListenChildren(string parentId, Action<List<ChildModel>> onChanged)
+    {
+        if (!IsInitialized || string.IsNullOrEmpty(parentId) || onChanged == null)
+            return null;
+
+        return db.Collection("users").Document(parentId).Collection("children")
+            .Listen(snapshot => onChanged(snapshot.Documents.Select(ReadChild).Where(child => child != null).ToList()));
     }
 
     public async Task<(bool success, string message)> AddChildAsync(string name, int age, int gender)
@@ -551,47 +561,236 @@ public class FirebaseManager : MonoBehaviour
         Debug.Log("<color=cyan>[Firebase]</color> Đã xóa thói quen thành công!");
     }
 
-    public async Task AddHabitLogAsync(string parentId, string childId, HabitLogModel habitLog)
+    public Task<bool> AddHabitLogAsync(string parentId, string childId, HabitLogModel habitLog)
     {
-        if (!IsInitialized)
-        {
-            Debug.LogWarning("[Firebase] Hệ thống chưa sẵn sàng!");
-            return;
-        }
+        if (habitLog == null || habitLog.isApproved)
+            return Task.FromResult(false);
 
-        CollectionReference habitLogsRef = db.Collection("users")
-            .Document(parentId)
-            .Collection("children")
-            .Document(childId)
-            .Collection("habit_logs");
-
-        await habitLogsRef.AddAsync(habitLog);
-        Debug.Log("<color=cyan>[Firebase]</color> Đã ghi log thói quen thành công!");
+        return SetHabitCompletionAsync(parentId, childId, habitLog.habitId, habitLog.dateKey, habitLog.isCompleted);
     }
 
-    public async Task UpdateHabitLogAsync(string parentId, string childId, string logId, HabitLogModel habitLog)
+    public async Task<bool> UpdateHabitLogAsync(string parentId, string childId, string logId, HabitLogModel habitLog)
     {
-        if (!IsInitialized)
+        if (!IsInitialized || habitLog == null || habitLog.isApproved || string.IsNullOrEmpty(logId)
+            || !HasHabitLogContext(parentId, childId, habitLog.habitId, habitLog.dateKey))
+            return false;
+
+        try
         {
-            Debug.LogWarning("[Firebase] Hệ thống chưa sẵn sàng!");
-            return;
-        }
+            DocumentSnapshot snapshot = await GetHabitLogsReference(parentId, childId).Document(logId).GetSnapshotAsync();
+            HabitLogModel existingLog = ReadHabitLog(snapshot);
+            if (existingLog == null || existingLog.habitId != habitLog.habitId || existingLog.dateKey != habitLog.dateKey)
+                return false;
 
-        if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId) || string.IsNullOrEmpty(logId))
+            return await SetHabitCompletionAsync(parentId, childId, habitLog.habitId, habitLog.dateKey, habitLog.isCompleted);
+        }
+        catch (Exception ex)
         {
-            Debug.LogWarning("[Firebase] Thiếu parentId, childId hoặc logId để cập nhật log thói quen.");
-            return;
+            Debug.LogError($"[Firebase] Không thể cập nhật log thói quen: {ex.Message}");
+            return false;
         }
+    }
 
-        DocumentReference habitLogRef = db.Collection("users")
-            .Document(parentId)
-            .Collection("children")
-            .Document(childId)
-            .Collection("habit_logs")
-            .Document(logId);
+    public async Task<HabitLogModel> GetHabitLogAsync(string parentId, string childId, string habitId, string dateKey)
+    {
+        if (!IsInitialized || !HasHabitLogContext(parentId, childId, habitId, dateKey))
+            return null;
 
-        await habitLogRef.SetAsync(habitLog, SetOptions.MergeAll);
-        Debug.Log("<color=cyan>[Firebase]</color> Đã cập nhật log thói quen thành công!");
+        QuerySnapshot snapshot = await GetHabitLogsReference(parentId, childId)
+            .WhereEqualTo("habitId", habitId)
+            .WhereEqualTo("dateKey", dateKey)
+            .GetSnapshotAsync();
+
+        return SelectHabitLog(snapshot.Documents.Select(ReadHabitLog));
+    }
+
+    public ListenerRegistration ListenHabitLogsForDate(string parentId, string childId, string dateKey, Action<List<HabitLogModel>> onChanged)
+    {
+        if (!IsInitialized || string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId)
+            || string.IsNullOrEmpty(dateKey) || onChanged == null)
+            return null;
+
+        // Include canceled logs so a daily document can supersede a pending legacy log.
+        return GetHabitLogsReference(parentId, childId)
+            .WhereEqualTo("dateKey", dateKey)
+            .Listen(snapshot => onChanged(NormalizeHabitLogs(snapshot.Documents.Select(ReadHabitLog))));
+    }
+
+    public ListenerRegistration ListenHabitLogs(string parentId, string childId, Action<List<HabitLogModel>> onChanged)
+    {
+        if (!IsInitialized || string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId) || onChanged == null)
+            return null;
+
+        // Normalize every day before callers filter pending requests; canceled canonical logs must win.
+        return GetHabitLogsReference(parentId, childId)
+            .Listen(snapshot => onChanged(NormalizeHabitLogs(snapshot.Documents.Select(ReadHabitLog))));
+    }
+
+    public async Task<bool> SetHabitCompletionAsync(string parentId, string childId, string habitId, string dateKey, bool isCompleted)
+    {
+        if (!IsInitialized || !HasHabitLogContext(parentId, childId, habitId, dateKey) || !HabitLog.CanEditToday(dateKey))
+            return false;
+
+        try
+        {
+            Timestamp completedAt = Timestamp.GetCurrentTimestamp();
+            CollectionReference logsRef = GetHabitLogsReference(parentId, childId);
+            DocumentReference dailyLogRef = logsRef.Document(GetHabitLogDocumentId(habitId, dateKey));
+            List<DocumentReference> references = await GetHabitLogReferencesAsync(logsRef, dailyLogRef, habitId, dateKey);
+
+            return await db.RunTransactionAsync(async transaction =>
+            {
+                HabitLogModel existingLog = await ReadHabitLogsInTransactionAsync(transaction, references);
+                if (!HabitLog.CanEditToday(dateKey) || (existingLog != null && existingLog.isApproved))
+                    return false;
+
+                // Repeated requests keep the original completion time; canceling an empty day is a no-op.
+                if (existingLog == null && !isCompleted)
+                    return true;
+                if (existingLog != null && existingLog.isCompleted == isCompleted)
+                    return true;
+
+                HabitLogModel updatedLog = new HabitLogModel
+                {
+                    habitId = habitId,
+                    dateKey = dateKey,
+                    isCompleted = isCompleted,
+                    isApproved = false,
+                    completedAt = isCompleted ? completedAt : existingLog.completedAt
+                };
+
+                transaction.Set(dailyLogRef, updatedLog, SetOptions.MergeAll);
+                return true;
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Firebase] Không thể lưu trạng thái hoàn thành: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> ApproveHabitLogAsync(string parentId, string childId, string habitId, string dateKey, Timestamp expectedCompletedAt)
+    {
+        if (!IsInitialized || !HasHabitLogContext(parentId, childId, habitId, dateKey))
+            return false;
+
+        try
+        {
+            CollectionReference logsRef = GetHabitLogsReference(parentId, childId);
+            DocumentReference dailyLogRef = logsRef.Document(GetHabitLogDocumentId(habitId, dateKey));
+            List<DocumentReference> references = await GetHabitLogReferencesAsync(logsRef, dailyLogRef, habitId, dateKey);
+
+            return await db.RunTransactionAsync(async transaction =>
+            {
+                HabitLogModel existingLog = await ReadHabitLogsInTransactionAsync(transaction, references);
+                if (existingLog == null || !existingLog.isCompleted || existingLog.completedAt != expectedCompletedAt)
+                    return false;
+
+                if (existingLog.isApproved)
+                    return true;
+
+                transaction.Set(dailyLogRef, new HabitLogModel
+                {
+                    habitId = habitId,
+                    dateKey = dateKey,
+                    isCompleted = true,
+                    isApproved = true,
+                    completedAt = existingLog.completedAt
+                }, SetOptions.MergeAll);
+                return true;
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Firebase] Không thể xác nhận thói quen: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static bool HasHabitLogContext(string parentId, string childId, string habitId, string dateKey)
+    {
+        return !string.IsNullOrEmpty(parentId) && !string.IsNullOrEmpty(childId)
+            && !string.IsNullOrEmpty(habitId) && !string.IsNullOrEmpty(dateKey);
+    }
+
+    private CollectionReference GetHabitLogsReference(string parentId, string childId)
+    {
+        return db.Collection("users").Document(parentId).Collection("children").Document(childId).Collection("habit_logs");
+    }
+
+    private static string GetHabitLogDocumentId(string habitId, string dateKey)
+    {
+        return $"{dateKey}_{habitId}";
+    }
+
+    private static ChildModel ReadChild(DocumentSnapshot snapshot)
+    {
+        if (!snapshot.Exists)
+            return null;
+
+        ChildModel child = snapshot.ConvertTo<ChildModel>();
+        if (child != null)
+            child.childId = snapshot.Id;
+        return child;
+    }
+
+    private static HabitModel ReadHabit(DocumentSnapshot snapshot)
+    {
+        if (!snapshot.Exists)
+            return null;
+
+        HabitModel habit = snapshot.ConvertTo<HabitModel>();
+        if (habit != null)
+            habit.id = snapshot.Id;
+        return habit;
+    }
+
+    private static HabitLogModel ReadHabitLog(DocumentSnapshot snapshot)
+    {
+        if (!snapshot.Exists)
+            return null;
+
+        HabitLogModel log = snapshot.ConvertTo<HabitLogModel>();
+        if (log != null)
+            log.logId = snapshot.Id;
+        return log;
+    }
+
+    private static HabitLogModel SelectHabitLog(IEnumerable<HabitLogModel> logs)
+    {
+        // Keep legacy random-ID logs. An approved log always wins; otherwise prefer the daily document.
+        return logs.Where(log => log != null)
+            .OrderByDescending(log => log.isApproved)
+            .ThenByDescending(log => log.logId == GetHabitLogDocumentId(log.habitId, log.dateKey))
+            .ThenByDescending(log => log.completedAt)
+            .ThenBy(log => log.logId, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static List<HabitLogModel> NormalizeHabitLogs(IEnumerable<HabitLogModel> logs)
+    {
+        return logs.Where(log => log != null)
+            .GroupBy(log => (log.habitId, log.dateKey))
+            .Select(group => SelectHabitLog(group))
+            .ToList();
+    }
+
+    private async Task<List<DocumentReference>> GetHabitLogReferencesAsync(CollectionReference logsRef, DocumentReference dailyLogRef, string habitId, string dateKey)
+    {
+        QuerySnapshot snapshot = await logsRef.WhereEqualTo("habitId", habitId).WhereEqualTo("dateKey", dateKey).GetSnapshotAsync();
+        List<DocumentReference> references = new List<DocumentReference> { dailyLogRef };
+        references.AddRange(snapshot.Documents.Where(document => document.Id != dailyLogRef.Id).Select(document => document.Reference));
+        return references;
+    }
+
+    private static async Task<HabitLogModel> ReadHabitLogsInTransactionAsync(Transaction transaction, List<DocumentReference> references)
+    {
+        List<HabitLogModel> logs = new List<HabitLogModel>();
+        // Every mutation reads the same daily document, including when it does not exist yet.
+        foreach (DocumentReference reference in references)
+            logs.Add(ReadHabitLog(await transaction.GetSnapshotAsync(reference)));
+        return SelectHabitLog(logs);
     }
 
     public async Task AddRewardAsync(string parentId, string childId, RewardModel reward)
@@ -645,6 +844,15 @@ public class FirebaseManager : MonoBehaviour
         return habitList;
     }
 
+    public ListenerRegistration ListenHabits(string parentId, string childId, Action<List<HabitModel>> onChanged)
+    {
+        if (!IsInitialized || string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId) || onChanged == null)
+            return null;
+
+        return db.Collection("users").Document(parentId).Collection("children").Document(childId).Collection("habits")
+            .Listen(snapshot => onChanged(snapshot.Documents.Select(ReadHabit).Where(habit => habit != null).ToList()));
+    }
+
     public async Task<List<HabitLogModel>> GetHabitLogsAsync(string parentId, string childId)
     {
         List<HabitLogModel> logs = new List<HabitLogModel>();
@@ -672,7 +880,7 @@ public class FirebaseManager : MonoBehaviour
             }
         }
 
-        return logs;
+        return NormalizeHabitLogs(logs);
     }
 
     public async Task<List<RewardModel>> GetRewardsAsync(string parentId, string childId)

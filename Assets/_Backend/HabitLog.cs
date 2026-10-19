@@ -1,5 +1,6 @@
 using Firebase.Firestore;
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -8,7 +9,7 @@ public class HabitLog : MonoBehaviour
 {
     public static string GetTodayDateKey()
     {
-        return DateTime.Today.ToString("yyyy-MM-dd");
+        return DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
     public static bool CanEditToday(string dateKey)
@@ -27,13 +28,8 @@ public class HabitLog : MonoBehaviour
         if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId) || string.IsNullOrEmpty(habitId))
             return null;
 
-        var logs = await FirebaseManager.Instance.GetHabitLogsAsync(parentId, childId);
         string todayKey = GetTodayDateKey();
-
-        return logs.FirstOrDefault(log =>
-            log != null &&
-            log.habitId == habitId &&
-            log.dateKey == todayKey);
+        return await FirebaseManager.Instance.GetHabitLogAsync(parentId, childId, habitId, todayKey);
     }
 
     public static async Task<bool> GetTodayCompletionStateAsync(string parentId, string childId, string habitId)
@@ -71,40 +67,16 @@ public class HabitLog : MonoBehaviour
             return false;
         }
 
-        var todayKey = GetTodayDateKey();
-        var logs = await FirebaseManager.Instance.GetHabitLogsAsync(parentId, childId);
-        var todayLog = logs.FirstOrDefault(log =>
-            log != null &&
-            log.habitId == habitId &&
-            log.dateKey == todayKey);
+        string todayKey = GetTodayDateKey();
+        return await FirebaseManager.Instance.SetHabitCompletionAsync(parentId, childId, habitId, todayKey, isCompleted);
+    }
 
-        if (todayLog != null)
-        {
-            if (!CanEditToday(todayLog.dateKey))
-            {
-                Debug.Log("[HabitLog] Không thể sửa log của ngày cũ.");
-                return false;
-            }
+    public static Task<bool> ApproveHabitLogAsync(string parentId, string childId, string habitId, string dateKey, Timestamp expectedCompletedAt)
+    {
+        if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+            return Task.FromResult(false);
 
-            todayLog.isCompleted = isCompleted;
-            todayLog.completedAt = Timestamp.GetCurrentTimestamp();
-            todayLog.isApproved = false;
-
-            await FirebaseManager.Instance.UpdateHabitLogAsync(parentId, childId, todayLog.logId, todayLog);
-            return true;
-        }
-
-        HabitLogModel newLog = new HabitLogModel
-        {
-            habitId = habitId,
-            dateKey = todayKey,
-            isCompleted = isCompleted,
-            completedAt = Timestamp.GetCurrentTimestamp(),
-            isApproved = false
-        };
-
-        await FirebaseManager.Instance.AddHabitLogAsync(parentId, childId, newLog);
-        return true;
+        return FirebaseManager.Instance.ApproveHabitLogAsync(parentId, childId, habitId, dateKey, expectedCompletedAt);
     }
 }
 

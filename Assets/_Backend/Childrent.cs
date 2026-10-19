@@ -90,24 +90,32 @@ public class Childrent : MonoBehaviour
         if (updateChildPopup != null && !string.IsNullOrEmpty(child.childId))
         {
             Button editButton = item.transform.Find("EditButton")?.GetComponent<Button>();
-            if (editButton == null)
-                editButton = CreateActionButton(item.transform, texts.Length > 0 ? texts[0] : null,
-                    "EditButton", "Sửa", -84f, new Color(0.85f, 0.9f, 1f));
+            if (editButton == null) Debug.LogWarning("[Childrent] Không tìm thấy nút chỉnh sửa trẻ trong prefab.");
+            else
+            {
+                // Use a fresh event so an Inspector callback cannot open a different child.
+                editButton.onClick = new Button.ButtonClickedEvent();
+                editButton.onClick.AddListener(() => updateChildPopup.OpenPopup(child));
+            }
 
             // Use a fresh event so an Inspector callback cannot open a different child.
-            editButton.onClick = new Button.ButtonClickedEvent();
-            editButton.onClick.AddListener(() => updateChildPopup.OpenPopup(child));
+            // editButton.onClick = new Button.ButtonClickedEvent();
+            // editButton.onClick.AddListener(() => updateChildPopup.OpenPopup(child));
         }
 
         if (!string.IsNullOrEmpty(child.childId))
         {
             Button deleteButton = item.transform.Find("DeleteButton")?.GetComponent<Button>();
-            if (deleteButton == null)
-                deleteButton = CreateActionButton(item.transform, texts.Length > 0 ? texts[0] : null,
-                    "DeleteButton", "Xóa", -12f, new Color(1f, 0.85f, 0.85f));
+            if (deleteButton == null) Debug.LogWarning("[Childrent] Không tìm thấy nút xóa trẻ trong prefab.");
+            else
+            {
+                // Use a fresh event so an Inspector callback cannot delete a different child.
+                deleteButton.onClick = new Button.ButtonClickedEvent();
+                deleteButton.onClick.AddListener(() => OnDeleteChildClicked(child, item, firebaseManager));
+            }
 
-            deleteButton.onClick = new Button.ButtonClickedEvent();
-            deleteButton.onClick.AddListener(() => OnDeleteChildClicked(child, item, firebaseManager));
+            // deleteButton.onClick = new Button.ButtonClickedEvent();
+            // deleteButton.onClick.AddListener(() => OnDeleteChildClicked(child, item, firebaseManager));
         }
 
         Button button = item.GetComponent<Button>();
@@ -125,6 +133,15 @@ public class Childrent : MonoBehaviour
                     if (missionController != null && missionController.HasStarted)
                     {
                         _ = missionController.LoadHabitsForCurrentUser();
+                    }
+
+                    var displayMission = Mission.GetComponent<DisplayMission>();
+                    var nameChildText = Mission.transform.Find("NameChild")?.GetComponent<TMP_Text>();
+                    if (displayMission != null && displayMission.HasStarted)
+                    {
+                        _ = displayMission.LoadHabitsForChildAsync(child.childId);
+                        if (nameChildText != null)
+                            nameChildText.text = $"Thói quen của {child.name}";
                     }
                 }
 
@@ -170,42 +187,5 @@ public class Childrent : MonoBehaviour
                     button.interactable = true;
             }
         }
-    }
-
-    private Button CreateActionButton(Transform parent, TMP_Text sourceText,
-        string objectName, string caption, float positionX, Color color)
-    {
-        GameObject editObject = new GameObject(objectName, typeof(RectTransform), typeof(Image), typeof(Button));
-        editObject.layer = parent.gameObject.layer;
-        editObject.transform.SetParent(parent, false);
-
-        RectTransform rect = editObject.GetComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(1f, 0.5f);
-        rect.pivot = new Vector2(1f, 0.5f);
-        rect.anchoredPosition = new Vector2(positionX, 0f);
-        rect.sizeDelta = new Vector2(64f, 36f);
-
-        Image image = editObject.GetComponent<Image>();
-        image.color = color;
-        Button button = editObject.GetComponent<Button>();
-        button.targetGraphic = image;
-
-        GameObject labelObject = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
-        labelObject.layer = editObject.layer;
-        labelObject.transform.SetParent(editObject.transform, false);
-        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = labelRect.offsetMax = Vector2.zero;
-
-        TextMeshProUGUI label = labelObject.GetComponent<TextMeshProUGUI>();
-        if (sourceText != null)
-            label.font = sourceText.font;
-        label.text = caption;
-        label.fontSize = 18f;
-        label.color = Color.black;
-        label.alignment = TextAlignmentOptions.Center;
-        label.raycastTarget = false;
-        return button;
     }
 }

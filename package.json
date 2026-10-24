@@ -1,0 +1,16 @@
+{
+  "name": "habimon-firestore-rules",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:firestore-rules": "npx --yes firebase-tools@15.34.0 emulators:exec --only firestore --project habimon-808e2 \"node --test tests/firestore-rules/firestore.rules.test.mjs\"",
+    "test:firebase-provisioning": "npx --yes firebase-tools@15.34.0 emulators:exec --only auth,firestore --project habimon-808e2 \"bash tests/firebase-provisioning/run-unity.sh\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.0.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
+  }
+}

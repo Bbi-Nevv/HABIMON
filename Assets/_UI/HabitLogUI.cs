@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using HABIMON.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,7 +24,6 @@ public class HabitLogUI : MonoBehaviour
 
     [Header("Chart")]
     [SerializeField] private RectTransform chartRoot;
-    [SerializeField] private GameObject chartBarPrefab;
 
     private enum ViewMode
     {
@@ -33,47 +34,107 @@ public class HabitLogUI : MonoBehaviour
 
     private readonly List<HabitModel> habits = new List<HabitModel>();
     private readonly List<HabitLogModel> logs = new List<HabitLogModel>();
+    private readonly List<GameObject> generatedChartObjects = new List<GameObject>();
 
     private ViewMode currentMode = ViewMode.Day;
-    private DateTime currentDate = DateTime.Today;
+    private DateTime currentDate = HabitLog.GetBusinessDate(DateTimeOffset.UtcNow);
+    private FirebaseManager subscribedManager;
+    private int refreshVersion;
 
-    private class ProgressPoint
+    private sealed class ProgressPoint
     {
-        public string Label { get; set; }
-        public int Total { get; set; }
-        public int Completed { get; set; }
-        public float Ratio => Total > 0 ? (float)Completed / Total : 0f;
+        public string Label;
+        public int Total;
+        public int Completed;
+        public bool HasUnknownCoverage;
+        public bool HasConflictingRecords;
+        public float Ratio => Total > 0 ? Mathf.Clamp01((float)Completed / Total) : 0f;
+    }
+
+    private void OnEnable()
+    {
+        SubscribeToSession();
     }
 
     private void Start()
     {
         BindButtons();
+        SubscribeToSession();
         _ = RefreshAsync();
+    }
+
+    private void OnDisable()
+    {
+        refreshVersion++;
+        UnsubscribeFromSession();
+    }
+
+    private void SubscribeToSession()
+    {
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null || subscribedManager == manager)
+            return;
+
+        UnsubscribeFromSession();
+        subscribedManager = manager;
+        subscribedManager.CurrentChildChanged += OnCurrentChildChanged;
+        subscribedManager.SessionChanged += OnSessionChanged;
+    }
+
+    private void UnsubscribeFromSession()
+    {
+        if (subscribedManager == null)
+            return;
+
+        subscribedManager.CurrentChildChanged -= OnCurrentChildChanged;
+        subscribedManager.SessionChanged -= OnSessionChanged;
+        subscribedManager = null;
+    }
+
+    private void OnCurrentChildChanged()
+    {
+        ClearSnapshot();
+        _ = RefreshAsync();
+    }
+
+    private void OnSessionChanged()
+    {
+        ClearSnapshot();
+        if (FirebaseManager.Instance?.CurrentUser == null)
+        {
+            if (summaryText != null)
+                summaryText.text = "Vui lòng đăng nhập để xem thống kê.";
+            return;
+        }
+
+        _ = RefreshAsync();
+    }
+
+    private void ClearSnapshot()
+    {
+        habits.Clear();
+        logs.Clear();
+        Render();
     }
 
     private void BindButtons()
     {
         if (dayFilterButton != null)
-            dayFilterButton.onClick.RemoveAllListeners();
+            dayFilterButton.onClick.AddListener(() => ChangeMode(ViewMode.Day));
         if (monthFilterButton != null)
-            monthFilterButton.onClick.RemoveAllListeners();
+            monthFilterButton.onClick.AddListener(() => ChangeMode(ViewMode.Month));
         if (yearFilterButton != null)
-            yearFilterButton.onClick.RemoveAllListeners();
-        if (previousButton != null)
-            previousButton.onClick.RemoveAllListeners();
-        if (nextButton != null)
-            nextButton.onClick.RemoveAllListeners();
-
-        if (dayFilterButton != null)
-            dayFilterButton.onClick.AddListener(() => { currentMode = ViewMode.Day; Render(); });
-        if (monthFilterButton != null)
-            monthFilterButton.onClick.AddListener(() => { currentMode = ViewMode.Month; Render(); });
-        if (yearFilterButton != null)
-            yearFilterButton.onClick.AddListener(() => { currentMode = ViewMode.Year; Render(); });
+            yearFilterButton.onClick.AddListener(() => ChangeMode(ViewMode.Year));
         if (previousButton != null)
             previousButton.onClick.AddListener(GoToPreviousPeriod);
         if (nextButton != null)
             nextButton.onClick.AddListener(GoToNextPeriod);
+    }
+
+    private void ChangeMode(ViewMode mode)
+    {
+        currentMode = mode;
+        _ = RefreshAsync();
     }
 
     private void GoToPreviousPeriod()
@@ -84,14 +145,14 @@ public class HabitLogUI : MonoBehaviour
                 currentDate = currentDate.AddDays(-1);
                 break;
             case ViewMode.Month:
-                currentDate = currentDate.AddMonths(-1);
+                currentDate = new DateTime(currentDate.Year, currentDate.Month, 1).AddMonths(-1);
                 break;
             case ViewMode.Year:
-                currentDate = currentDate.AddYears(-1);
+                currentDate = new DateTime(currentDate.Year - 1, 1, 1);
                 break;
         }
 
-        Render();
+        _ = RefreshAsync();
     }
 
     private void GoToNextPeriod()
@@ -102,58 +163,121 @@ public class HabitLogUI : MonoBehaviour
                 currentDate = currentDate.AddDays(1);
                 break;
             case ViewMode.Month:
-                currentDate = currentDate.AddMonths(1);
+                currentDate = new DateTime(currentDate.Year, currentDate.Month, 1).AddMonths(1);
                 break;
             case ViewMode.Year:
-                currentDate = currentDate.AddYears(1);
+                currentDate = new DateTime(currentDate.Year + 1, 1, 1);
                 break;
         }
 
-        Render();
+        _ = RefreshAsync();
     }
 
     public async Task RefreshAsync()
     {
-        if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+        int requestVersion = ++refreshVersion;
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null)
         {
             if (summaryText != null)
                 summaryText.text = "Chưa kết nối Firebase";
             return;
         }
 
-        string parentId = FirebaseManager.Instance.GetCurrentParentId();
-        string childId = FirebaseManager.Instance.GetCurrentChildId();
-
-        if (string.IsNullOrEmpty(childId))
-            childId = await FirebaseManager.Instance.ResolveCurrentChildIdAsync();
-
-        if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId))
+        if (!await manager.EnsureInitializedAsync())
         {
+            if (summaryText != null)
+                summaryText.text = $"Firebase chưa sẵn sàng: {manager.InitializationError}";
+            return;
+        }
+
+        string parentId = manager.GetCurrentParentId();
+        string childId = manager.GetCurrentChildId();
+        if (string.IsNullOrEmpty(childId))
+            childId = await manager.ResolveCurrentChildIdAsync();
+
+        if (this == null || requestVersion != refreshVersion || manager != FirebaseManager.Instance)
+            return;
+
+        if (string.IsNullOrEmpty(parentId) || parentId != manager.GetCurrentParentId() ||
+            string.IsNullOrEmpty(childId) || childId != manager.GetCurrentChildId())
+        {
+            ClearSnapshot();
             if (summaryText != null)
                 summaryText.text = "Thiếu thông tin phụ huynh / trẻ";
             return;
         }
 
-        habits.Clear();
-        logs.Clear();
+        int sessionGeneration = manager.SessionGeneration;
+        GetRange(out DateTime startDate, out DateTime endDateExclusive);
+        string startDateKey = startDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        string endDateKey = endDateExclusive.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-        habits.AddRange(await FirebaseManager.Instance.GetHabitsAsync(parentId, childId));
-        logs.AddRange(await FirebaseManager.Instance.GetHabitLogsAsync(parentId, childId));
+        try
+        {
+            Task<List<HabitModel>> habitsTask = manager.GetHabitsAsync(parentId, childId);
+            Task<List<HabitLogModel>> logsTask = manager.GetHabitLogsInRangeAsync(
+                parentId, childId, startDateKey, endDateKey);
+            await Task.WhenAll(habitsTask, logsTask);
 
-        Render();
+            if (this == null || !isActiveAndEnabled || requestVersion != refreshVersion ||
+                manager != FirebaseManager.Instance || manager.SessionGeneration != sessionGeneration ||
+                manager.GetCurrentParentId() != parentId || manager.GetCurrentChildId() != childId)
+                return;
+
+            habits.Clear();
+            habits.AddRange(habitsTask.Result.Where(habit => habit != null));
+            logs.Clear();
+            logs.AddRange(logsTask.Result.Where(log => log != null));
+            Render();
+        }
+        catch (Exception ex)
+        {
+            if (this == null || requestVersion != refreshVersion)
+                return;
+
+            Debug.LogError($"[HabitLogUI] Không thể tải thống kê: {ex.Message}");
+            if (summaryText != null)
+                summaryText.text = "Không thể tải thống kê. Vui lòng thử lại.";
+        }
+    }
+
+    private void GetRange(out DateTime start, out DateTime endExclusive)
+    {
+        if (currentMode == ViewMode.Day)
+        {
+            start = currentDate.Date;
+            endExclusive = start.AddDays(1);
+            return;
+        }
+
+        if (currentMode == ViewMode.Month)
+        {
+            start = new DateTime(currentDate.Year, currentDate.Month, 1);
+            endExclusive = start.AddMonths(1);
+            return;
+        }
+
+        start = new DateTime(currentDate.Year, 1, 1);
+        endExclusive = start.AddYears(1);
     }
 
     private void Render()
     {
         UpdateFilterButtonState();
-
-        List<ProgressPoint> points = BuildProgressPoints();
+        List<HabitOccurrence> occurrences = BuildHabitOccurrences();
+        List<HabitCompletion> completions = BuildCompletions();
+        List<ProgressPoint> points = BuildProgressPoints(occurrences, completions);
 
         if (summaryText != null)
         {
-            int total = points.Sum(p => p.Total);
-            int completed = points.Sum(p => p.Completed);
-            summaryText.text = total > 0 ? $"{completed}/{total} nhiệm vụ" : "0/0 nhiệm vụ";
+            int total = points.Sum(point => point.Total);
+            int completed = points.Sum(point => point.Completed);
+            bool unknown = points.Any(point => point.HasUnknownCoverage);
+            bool conflicts = points.Any(point => point.HasConflictingRecords);
+            string suffix = unknown ? " (lịch sử chưa đầy đủ)" : conflicts ? " (có log trùng cần đối soát)" : string.Empty;
+            summaryText.text = total > 0 ? $"{completed}/{total} nhiệm vụ{suffix}" :
+                unknown ? "Chưa đủ dữ liệu lịch sử để tính." : "0/0 nhiệm vụ";
         }
 
         if (periodLabelText != null)
@@ -175,125 +299,122 @@ public class HabitLogUI : MonoBehaviour
             yearFilterButton.interactable = currentMode != ViewMode.Year;
     }
 
-    private List<ProgressPoint> BuildProgressPoints()
+    private List<ProgressPoint> BuildProgressPoints(
+        List<HabitOccurrence> occurrences,
+        List<HabitCompletion> completions)
     {
         var result = new List<ProgressPoint>();
 
         if (currentMode == ViewMode.Day)
         {
-            result.Add(CreatePointForDate(currentDate, GetDayLabel(currentDate)));
+            result.Add(CreatePointForRange(currentDate.Date, currentDate.Date.AddDays(1), GetDayLabel(currentDate), occurrences, completions));
             return result;
         }
 
         if (currentMode == ViewMode.Month)
         {
             DateTime start = new DateTime(currentDate.Year, currentDate.Month, 1);
-            DateTime end = start.AddMonths(1).AddDays(-1);
-
-            for (DateTime date = start; date <= end; date = date.AddDays(1))
-            {
-                result.Add(CreatePointForDate(date, GetShortDayLabel(date)));
-            }
-
+            DateTime end = start.AddMonths(1);
+            for (DateTime date = start; date < end; date = date.AddDays(1))
+                result.Add(CreatePointForRange(date, date.AddDays(1), GetShortDayLabel(date), occurrences, completions));
             return result;
         }
 
         DateTime yearStart = new DateTime(currentDate.Year, 1, 1);
-        for (int month = 1; month <= 12; month++)
+        for (int month = 0; month < 12; month++)
         {
-            DateTime monthDate = new DateTime(currentDate.Year, month, 1);
-            result.Add(CreatePointForDate(monthDate, GetMonthShortLabel(monthDate)));
+            DateTime start = yearStart.AddMonths(month);
+            DateTime end = start.AddMonths(1);
+            result.Add(CreatePointForRange(start, end, GetMonthShortLabel(start), occurrences, completions));
         }
 
         return result;
     }
 
-    private ProgressPoint CreatePointForDate(DateTime date, string label)
+    private ProgressPoint CreatePointForRange(
+        DateTime start,
+        DateTime endExclusive,
+        string label,
+        List<HabitOccurrence> occurrences,
+        List<HabitCompletion> completions)
     {
-        int total = CountTotalTasksForDate(date);
-        int completed = CountCompletedTasksForDate(date);
-
+        HabitProgress progress = HabitAnalytics.Calculate(start, endExclusive, occurrences, completions);
         return new ProgressPoint
         {
             Label = label,
-            Total = total,
-            Completed = completed
+            Total = progress.Total,
+            Completed = progress.Completed,
+            HasUnknownCoverage = progress.HasUnknownCoverage,
+            HasConflictingRecords = progress.HasConflictingRecords
         };
     }
 
-    private int CountTotalTasksForDate(DateTime date)
+    private List<HabitOccurrence> BuildHabitOccurrences()
     {
-        if (habits == null || habits.Count == 0)
-            return 0;
-
-        return habits.Count(h => h != null && h.isActive && IsHabitScheduledForDate(h, date));
-    }
-
-    private int CountCompletedTasksForDate(DateTime date)
-    {
-        if (logs == null || logs.Count == 0 || habits == null || habits.Count == 0)
-            return 0;
-
-        string dateKey = date.ToString("yyyy-MM-dd");
-        HashSet<string> completedHabitIds = new HashSet<string>(
-            logs.Where(log => log != null && log.isCompleted && log.dateKey == dateKey)
-                .Select(log => log.habitId)
-                .Where(id => !string.IsNullOrEmpty(id))
-        );
-
-        return habits.Count(h =>
-            h != null &&
-            h.isActive &&
-            IsHabitScheduledForDate(h, date) &&
-            !string.IsNullOrEmpty(h.id) &&
-            completedHabitIds.Contains(h.id));
-    }
-
-    private bool IsHabitScheduledForDate(HabitModel habit, DateTime date)
-    {
-        if (habit == null || !habit.isActive)
-            return false;
-
-        if (habit.repeatDays == null || habit.repeatDays.Count == 0)
-            return true;
-
-        int weekdayNumber = NormalizeDayOfWeek((int)date.DayOfWeek);
-
-        foreach (int day in habit.repeatDays)
+        var result = new List<HabitOccurrence>(habits.Count);
+        foreach (HabitModel habit in habits)
         {
-            if (NormalizeDayOfWeek(day) == weekdayNumber)
-                return true;
+            if (habit == null || string.IsNullOrEmpty(habit.id))
+                continue;
+
+            DateTime? effectiveFrom = ParseBusinessDate(habit.effectiveFrom);
+            DateTime? archivedAt = habit.archivedAt.HasValue
+                ? HabitLog.GetBusinessDate(new DateTimeOffset(habit.archivedAt.Value.ToDateTime().ToUniversalTime()))
+                : (DateTime?)null;
+
+            result.Add(new HabitOccurrence
+            {
+                HabitId = habit.id,
+                Schedule = HabitSchedule.FromStorage(habit.scheduleKind, habit.scheduleValue, habit.timeTarget),
+                RepeatDays = habit.repeatDays?.ToArray(),
+                EffectiveFrom = effectiveFrom,
+                ArchivedAt = archivedAt,
+                IsActive = habit.isActive,
+                RequireApproval = habit.requireApproval
+            });
         }
 
-        return false;
+        return result;
     }
 
-    private int NormalizeDayOfWeek(int value)
+    private List<HabitCompletion> BuildCompletions()
     {
-        if (value == 7)
-            return 7;
+        var result = new List<HabitCompletion>(logs.Count);
+        foreach (HabitLogModel log in logs)
+        {
+            if (log == null || string.IsNullOrEmpty(log.habitId) ||
+                !DateTime.TryParseExact(log.dateKey, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out DateTime date))
+                continue;
 
-        if (value == 0)
-            return 7;
+            result.Add(new HabitCompletion
+            {
+                HabitId = log.habitId,
+                Date = date,
+                IsCompleted = log.isCompleted,
+                IsApproved = log.isApproved,
+                RequiresApprovalAtCompletion = log.requiresApprovalAtCompletion
+            });
+        }
 
-        if (value < 0)
-            return 7;
+        return result;
+    }
 
-        if (value > 7)
-            return value % 7 == 0 ? 7 : value % 7;
-
-        return value;
+    private static DateTime? ParseBusinessDate(string value)
+    {
+        if (DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out DateTime date))
+            return date.Date;
+        return null;
     }
 
     private string GetPeriodTitle()
     {
         if (currentMode == ViewMode.Day)
-            return currentDate.ToString("dd/MM/yyyy");
-
+            return currentDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
         if (currentMode == ViewMode.Month)
-            return currentDate.ToString("MM/yyyy");
-
-        return currentDate.ToString("yyyy");
+            return currentDate.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+        return currentDate.ToString("yyyy", CultureInfo.InvariantCulture);
     }
 
     private string BuildDetailText(List<ProgressPoint> points)
@@ -303,13 +424,18 @@ public class HabitLogUI : MonoBehaviour
 
         if (currentMode == ViewMode.Day)
         {
-            ProgressPoint dayPoint = points[0];
-            return dayPoint.Total > 0
-                ? $"{dayPoint.Label}: {dayPoint.Completed}/{dayPoint.Total} nhiệm vụ hoàn thành"
-                : "Chưa có nhiệm vụ được lên lịch cho ngày này.";
+            ProgressPoint day = points[0];
+            if (day.Total == 0)
+                return day.HasUnknownCoverage
+                    ? "Chưa đủ dữ liệu lịch sử cho ngày này."
+                    : "Chưa có nhiệm vụ được lên lịch cho ngày này.";
+            return day.HasUnknownCoverage
+                ? $"{day.Label}: {day.Completed}/{day.Total} nhiệm vụ đã biết; lịch sử chưa đầy đủ."
+                : $"{day.Label}: {day.Completed}/{day.Total} nhiệm vụ hoàn thành";
         }
 
-        return string.Join("\n", points.Select(p => $"{p.Label}: {p.Completed}/{p.Total}"));
+        return string.Join("\n", points.Select(point =>
+            $"{point.Label}: {(point.Total > 0 ? $"{point.Completed}/{point.Total}" : point.HasUnknownCoverage ? "?" : "—")}"));
     }
 
     private string GetDayLabel(DateTime date)
@@ -323,99 +449,112 @@ public class HabitLogUI : MonoBehaviour
             DayOfWeek.Friday => "T6",
             DayOfWeek.Saturday => "T7",
             DayOfWeek.Sunday => "CN",
-            _ => date.ToString("dd")
+            _ => date.ToString("dd", CultureInfo.InvariantCulture)
         };
     }
 
     private string GetShortDayLabel(DateTime date)
     {
-        return date.Day.ToString();
+        return date.Day.ToString(CultureInfo.InvariantCulture);
     }
 
     private string GetMonthShortLabel(DateTime date)
     {
-        return date.ToString("MM");
+        return date.ToString("MM", CultureInfo.InvariantCulture);
     }
 
     private void RenderChart(List<ProgressPoint> points)
     {
-        if (chartRoot == null)
+        ClearGeneratedChartObjects();
+        if (chartRoot == null || points == null || points.Count == 0)
             return;
 
-        for (int i = chartRoot.childCount - 1; i >= 0; i--)
-        {
-            Destroy(chartRoot.GetChild(i).gameObject);
-        }
-
-        if (points == null || points.Count == 0)
-            return;
-
+        RectTransform viewport = chartRoot.parent as RectTransform;
+        float viewportWidth = viewport != null && viewport.rect.width > 0 ? viewport.rect.width :
+            chartRoot.rect.width > 0 ? chartRoot.rect.width : 600f;
+        float contentWidth = Mathf.Max(viewportWidth, points.Count * 40f);
+        chartRoot.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, contentWidth);
         float totalHeight = chartRoot.rect.height > 0 ? chartRoot.rect.height : 220f;
-        float totalWidth = chartRoot.rect.width > 0 ? chartRoot.rect.width : 600f;
-        float spacing = totalWidth / Mathf.Max(points.Count, 1);
+        float spacing = contentWidth / points.Count;
 
-        for (int i = 0; i < points.Count; i++)
+        for (int index = 0; index < points.Count; index++)
         {
-            ProgressPoint point = points[i];
+            ProgressPoint point = points[index];
+            float barHeight = point.Ratio * totalHeight * 0.8f;
 
-            GameObject barObject = chartBarPrefab != null ? Instantiate(chartBarPrefab, chartRoot) : new GameObject($"Bar_{i}", typeof(RectTransform), typeof(Image));
+            GameObject barObject = new GameObject($"Bar_{index}", typeof(RectTransform), typeof(Image));
+            barObject.layer = chartRoot.gameObject.layer;
+            barObject.transform.SetParent(chartRoot, false);
+            generatedChartObjects.Add(barObject);
             RectTransform barRect = barObject.GetComponent<RectTransform>();
             Image barImage = barObject.GetComponent<Image>();
-
-            if (barImage == null)
-                barImage = barObject.AddComponent<Image>();
-
             barImage.color = GetBarColor(point.Ratio);
-
+            barImage.raycastTarget = false;
             barRect.anchorMin = new Vector2(0f, 0f);
             barRect.anchorMax = new Vector2(0f, 0f);
             barRect.pivot = new Vector2(0.5f, 0f);
-            barRect.sizeDelta = new Vector2(Mathf.Min(28f, spacing * 0.7f), Mathf.Max(10f, point.Ratio * totalHeight * 0.8f));
-            barRect.anchoredPosition = new Vector2((i + 0.5f) * spacing, 0f);
+            barRect.sizeDelta = new Vector2(Mathf.Min(26f, spacing * 0.55f), barHeight);
+            barRect.anchoredPosition = new Vector2((index + 0.5f) * spacing, 0f);
 
-            GameObject labelObject = new GameObject($"Label_{i}", typeof(RectTransform), typeof(TMP_Text));
-            RectTransform labelRect = labelObject.GetComponent<RectTransform>();
-            labelRect.SetParent(chartRoot, false);
+            TMP_Text label = CreateChartText($"Label_{index}", point.Label, chartRoot);
+            RectTransform labelRect = (RectTransform)label.transform;
             labelRect.anchorMin = new Vector2(0f, 0f);
             labelRect.anchorMax = new Vector2(0f, 0f);
             labelRect.pivot = new Vector2(0.5f, 0f);
-            labelRect.sizeDelta = new Vector2(50f, 28f);
-            labelRect.anchoredPosition = new Vector2((i + 0.5f) * spacing, -28f);
+            labelRect.sizeDelta = new Vector2(spacing, 24f);
+            labelRect.anchoredPosition = new Vector2((index + 0.5f) * spacing, -26f);
+            label.fontSize = Mathf.Clamp(spacing * 0.45f, 10f, 16f);
 
-            TMP_Text labelText = labelObject.GetComponent<TMP_Text>();
-            labelText.text = point.Label;
-            labelText.alignment = TextAlignmentOptions.Center;
-            labelText.fontSize = 16;
-            labelText.color = Color.white;
-
-            GameObject valueObject = new GameObject($"Value_{i}", typeof(RectTransform), typeof(TMP_Text));
-            RectTransform valueRect = valueObject.GetComponent<RectTransform>();
-            valueRect.SetParent(chartRoot, false);
+            string value = point.Total > 0 ? $"{point.Completed}/{point.Total}" : point.HasUnknownCoverage ? "?" : "—";
+            TMP_Text valueText = CreateChartText($"Value_{index}", value, chartRoot);
+            RectTransform valueRect = (RectTransform)valueText.transform;
             valueRect.anchorMin = new Vector2(0f, 0f);
             valueRect.anchorMax = new Vector2(0f, 0f);
             valueRect.pivot = new Vector2(0.5f, 0f);
-            valueRect.sizeDelta = new Vector2(60f, 24f);
-            valueRect.anchoredPosition = new Vector2((i + 0.5f) * spacing, barRect.sizeDelta.y + 8f);
-
-            TMP_Text valueText = valueObject.GetComponent<TMP_Text>();
-            valueText.text = point.Total > 0 ? $"{point.Completed}/{point.Total}" : "0/0";
-            valueText.alignment = TextAlignmentOptions.Center;
-            valueText.fontSize = 14;
-            valueText.color = new Color(1f, 1f, 1f, 0.9f);
+            valueRect.sizeDelta = new Vector2(spacing, 22f);
+            valueRect.anchoredPosition = new Vector2((index + 0.5f) * spacing, barHeight + 6f);
+            valueText.fontSize = Mathf.Clamp(spacing * 0.35f, 10f, 14f);
         }
+    }
+
+    private TMP_Text CreateChartText(string objectName, string value, Transform parent)
+    {
+        GameObject textObject = new GameObject(objectName, typeof(RectTransform), typeof(TextMeshProUGUI));
+        textObject.layer = parent.gameObject.layer;
+        textObject.transform.SetParent(parent, false);
+        generatedChartObjects.Add(textObject);
+
+        TextMeshProUGUI text = textObject.GetComponent<TextMeshProUGUI>();
+        text.text = value;
+        text.alignment = TextAlignmentOptions.Center;
+        text.color = Color.white;
+        text.raycastTarget = false;
+        return text;
+    }
+
+    private void ClearGeneratedChartObjects()
+    {
+        foreach (GameObject generated in generatedChartObjects)
+        {
+            if (generated != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(generated);
+                else
+                    DestroyImmediate(generated);
+            }
+        }
+        generatedChartObjects.Clear();
     }
 
     private Color GetBarColor(float ratio)
     {
         if (ratio <= 0.25f)
             return new Color(0.76f, 0.89f, 1f, 1f);
-
         if (ratio <= 0.5f)
             return new Color(0.51f, 0.78f, 1f, 1f);
-
         if (ratio <= 0.75f)
             return new Color(0.29f, 0.67f, 1f, 1f);
-
         return new Color(0.12f, 0.48f, 0.96f, 1f);
     }
 }

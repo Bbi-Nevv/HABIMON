@@ -106,7 +106,20 @@ InitTestScene*.unity*
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
 # Gitnexus
-docs/
+!docs/
+docs/*
+!docs/CODEBASE_AUDIT_FINDINGS_2026-10-18.md
+!docs/CODEBASE_REMEDIATION_PLAN_2026-10-18.md
+!docs/CODEBASE_REVIEW_AND_CHANGE_REPORT_2026-10-18.md
+!docs/FIRESTORE_SETUP_2026-10-18.md
+!docs/FIREBASE_REMEDIATION_ACTION_PLAN_2026-10-22.md
 .claude/skills/
 AGENTS.md
 CLAUDE.md
+
+# Firebase CLI and local tooling
+/node_modules/
+/.firebase/
+/firebase-debug.log
+/firestore-debug.log
+/ui-debug.log

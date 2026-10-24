@@ -1,17 +1,40 @@
 using System;
+using System.IO;
 using System.Text;
 
 namespace HABIMON.Chatbot
 {
     public class ChatbotSseParser
     {
-        private readonly Decoder decoder = Encoding.UTF8.GetDecoder();
-        private readonly StringBuilder bufferedText = new StringBuilder();
+        private const int DefaultMaxLineCharacters = 64 * 1024;
+        private const int DefaultMaxEventCharacters = 256 * 1024;
+
+        private readonly Decoder decoder = new UTF8Encoding(false, true).GetDecoder();
+        private readonly StringBuilder line = new StringBuilder();
         private readonly StringBuilder data = new StringBuilder();
         private readonly char[] decodedChars = new char[4096];
+        private readonly int maxLineCharacters;
+        private readonly int maxEventCharacters;
         private string eventName;
+        private bool hasDataField;
+        private bool skipNextLineFeed;
+        private bool hasSeenCharacter;
+        private bool isCompleted;
 
         public event Action<ChatbotSseEvent> EventReceived;
+
+        public ChatbotSseParser(
+            int maxLineCharacters = DefaultMaxLineCharacters,
+            int maxEventCharacters = DefaultMaxEventCharacters)
+        {
+            if (maxLineCharacters < 1)
+                throw new ArgumentOutOfRangeException(nameof(maxLineCharacters));
+            if (maxEventCharacters < 1)
+                throw new ArgumentOutOfRangeException(nameof(maxEventCharacters));
+
+            this.maxLineCharacters = maxLineCharacters;
+            this.maxEventCharacters = maxEventCharacters;
+        }
 
         public void Feed(byte[] bytes, int count)
         {
@@ -19,105 +42,134 @@ namespace HABIMON.Chatbot
                 throw new ArgumentNullException(nameof(bytes));
             if (count < 0 || count > bytes.Length)
                 throw new ArgumentOutOfRangeException(nameof(count));
+            if (isCompleted)
+                throw new InvalidOperationException("The SSE stream is already complete.");
 
-            int charsRead = decoder.GetChars(bytes, 0, count, decodedChars, 0, false);
-            bufferedText.Append(decodedChars, 0, charsRead);
-            ProcessCompleteLines(false);
+            int byteOffset = 0;
+            while (byteOffset < count)
+            {
+                decoder.Convert(bytes, byteOffset, count - byteOffset, decodedChars, 0, decodedChars.Length, false,
+                    out int bytesUsed, out int charsRead, out _);
+
+                if (bytesUsed == 0 && charsRead == 0)
+                    throw new InvalidDataException("The UTF-8 decoder made no progress.");
+
+                byteOffset += bytesUsed;
+                for (int index = 0; index < charsRead; index++)
+                    ProcessCharacter(decodedChars[index]);
+            }
         }
 
         public void Complete()
         {
-            int charsRead = decoder.GetChars(Array.Empty<byte>(), 0, 0, decodedChars, 0, true);
-            bufferedText.Append(decodedChars, 0, charsRead);
-            ProcessCompleteLines(true);
+            if (isCompleted)
+                return;
 
-            if (bufferedText.Length > 0)
-            {
-                ProcessLine(bufferedText.ToString());
-                bufferedText.Clear();
-            }
+            decoder.Convert(Array.Empty<byte>(), 0, 0, decodedChars, 0, decodedChars.Length, true,
+                out _, out int charsRead, out _);
+            for (int index = 0; index < charsRead; index++)
+                ProcessCharacter(decodedChars[index]);
 
-            DispatchEvent();
+            // SSE dispatch requires a blank-line delimiter. An incomplete final line or event is discarded.
+            line.Clear();
+            data.Clear();
+            eventName = null;
+            hasDataField = false;
+            isCompleted = true;
         }
 
-        private void ProcessCompleteLines(bool flush)
+        private void ProcessCharacter(char character)
         {
-            while (bufferedText.Length > 0)
+            if (skipNextLineFeed)
             {
-                int lineEnd = -1;
-                int terminatorLength = 0;
-
-                for (int i = 0; i < bufferedText.Length; i++)
-                {
-                    char character = bufferedText[i];
-                    if (character == '\n')
-                    {
-                        lineEnd = i;
-                        terminatorLength = 1;
-                        break;
-                    }
-
-                    if (character == '\r')
-                    {
-                        if (i + 1 == bufferedText.Length && !flush)
-                            return;
-
-                        lineEnd = i;
-                        terminatorLength = i + 1 < bufferedText.Length && bufferedText[i + 1] == '\n' ? 2 : 1;
-                        break;
-                    }
-                }
-
-                if (lineEnd < 0)
+                skipNextLineFeed = false;
+                if (character == '\n')
                     return;
-
-                string line = bufferedText.ToString(0, lineEnd);
-                bufferedText.Remove(0, lineEnd + terminatorLength);
-                ProcessLine(line);
             }
+
+            if (!hasSeenCharacter)
+            {
+                hasSeenCharacter = true;
+                if (character == '\uFEFF')
+                    return;
+            }
+
+            if (character == '\r')
+            {
+                ProcessLine(line.ToString());
+                line.Clear();
+                skipNextLineFeed = true;
+                return;
+            }
+
+            if (character == '\n')
+            {
+                ProcessLine(line.ToString());
+                line.Clear();
+                return;
+            }
+
+            if (line.Length >= maxLineCharacters)
+                throw new InvalidDataException("The SSE line exceeds the configured size limit.");
+
+            line.Append(character);
         }
 
-        private void ProcessLine(string line)
+        private void ProcessLine(string value)
         {
-            if (line.Length == 0)
+            if (value.Length == 0)
             {
                 DispatchEvent();
                 return;
             }
 
-            if (line[0] == ':')
+            if (value[0] == ':')
                 return;
 
-            int separator = line.IndexOf(':');
-            string field = separator < 0 ? line : line.Substring(0, separator);
-            string value = separator < 0 ? string.Empty : line.Substring(separator + 1);
-            if (value.StartsWith(" ", StringComparison.Ordinal))
-                value = value.Substring(1);
+            int separator = value.IndexOf(':');
+            string field = separator < 0 ? value : value.Substring(0, separator);
+            string fieldValue = separator < 0 ? string.Empty : value.Substring(separator + 1);
+            if (fieldValue.StartsWith(" ", StringComparison.Ordinal))
+                fieldValue = fieldValue.Substring(1);
 
             if (field == "event")
             {
-                eventName = value;
+                eventName = fieldValue;
+                return;
             }
-            else if (field == "data")
-            {
-                if (data.Length > 0)
-                    data.Append('\n');
-                data.Append(value);
-            }
+
+            if (field != "data")
+                return;
+
+            if (data.Length + fieldValue.Length + 1 > maxEventCharacters)
+                throw new InvalidDataException("The SSE event exceeds the configured size limit.");
+
+            data.Append(fieldValue);
+            data.Append('\n');
+            hasDataField = true;
         }
 
         private void DispatchEvent()
         {
-            if (eventName == null && data.Length == 0)
+            if (!hasDataField)
+            {
+                eventName = null;
                 return;
+            }
+
+            int dataLength = data.Length - 1;
+            string eventData = data.ToString(0, dataLength);
+            string dispatchedEventName = string.IsNullOrEmpty(eventName) ? "message" : eventName;
+
+            eventName = null;
+            data.Clear();
+            hasDataField = false;
 
             EventReceived?.Invoke(new ChatbotSseEvent
             {
-                eventName = string.IsNullOrEmpty(eventName) ? "message" : eventName,
-                data = data.ToString()
+                eventName = dispatchedEventName,
+                data = eventData
             });
-            eventName = null;
-            data.Clear();
         }
     }
 }

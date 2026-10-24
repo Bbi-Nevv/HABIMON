@@ -1,9 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using Firebase.Firestore;
+using System;
 
 public class SignUp : MonoBehaviour
 {
@@ -15,6 +13,7 @@ public class SignUp : MonoBehaviour
     public TextMeshProUGUI notifi;
 
     private const int MinPasswordLength = 6;
+    private bool isSubmitting;
 
     private void Start()
     {
@@ -33,6 +32,15 @@ public class SignUp : MonoBehaviour
 
     private async void OnSignUpClicked()
     {
+        if (isSubmitting)
+            return;
+
+        isSubmitting = true;
+        if (signUpButton != null)
+            signUpButton.interactable = false;
+
+        try
+        {
         string email = emailInput != null ? emailInput.text.Trim() : string.Empty;
         string password = passwordInput != null ? passwordInput.text : string.Empty;
         string confirmPassword = confirmPasswordInput != null ? confirmPasswordInput.text : string.Empty;
@@ -65,16 +73,24 @@ public class SignUp : MonoBehaviour
             return;
         }
 
-        if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null)
         {
-            ShowMessage("Firebase chưa sẵn sàng, vui lòng thử lại sau.", Color.red);
-            Debug.LogWarning("[SignUp] Firebase chưa sẵn sàng.");
+            ShowMessage("Không tìm thấy FirebaseManager.", Color.red);
+            return;
+        }
+
+        if (!await manager.EnsureInitializedAsync())
+        {
+            ShowMessage($"Firebase chưa sẵn sàng: {manager.InitializationError}", Color.red);
             return;
         }
 
         Debug.Log("[SignUp] Đang tạo tài khoản...");
 
-        var (success, message) = await FirebaseManager.Instance.RegisterParentAsync(email, password);
+        var (success, message) = await manager.RegisterParentAsync(email, password);
+        if (this == null)
+            return;
 
         if (success)
         {
@@ -94,6 +110,24 @@ public class SignUp : MonoBehaviour
         {
             ShowMessage(message, Color.red);
             Debug.LogWarning($"[SignUp] {message}");
+        }
+        }
+        catch (Exception ex)
+        {
+            if (this != null)
+            {
+                Debug.LogError($"[SignUp] Đăng ký thất bại: {ex.Message}");
+                ShowMessage("Không thể hoàn tất đăng ký. Vui lòng thử lại.", Color.red);
+            }
+        }
+        finally
+        {
+            if (this != null)
+            {
+                isSubmitting = false;
+                if (signUpButton != null)
+                    signUpButton.interactable = true;
+            }
         }
     }
 

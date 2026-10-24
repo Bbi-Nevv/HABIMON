@@ -15,21 +15,31 @@ public class Login : MonoBehaviour
     [Header("GameObject")]
     [SerializeField] private GameObject mode;
     [SerializeField] private GameObject login;
+    private bool isLoggingIn;
 
     private void Start()
     {
-        mode.SetActive(false);
-        txtStatus.text = string.Empty;
+        if (mode != null)
+            mode.SetActive(false);
+        if (txtStatus != null)
+            txtStatus.text = string.Empty;
         if (btnLogin != null)
-        {
             btnLogin.onClick.AddListener(OnClickLogin);
-        }
+    }
+
+    private void OnDestroy()
+    {
+        if (btnLogin != null)
+            btnLogin.onClick.RemoveListener(OnClickLogin);
     }
 
     private async void OnClickLogin()
     {
-        string email = inputEmail.text.Trim();
-        string password = inputPassword.text;
+        if (isLoggingIn)
+            return;
+
+        string email = inputEmail != null ? inputEmail.text.Trim() : string.Empty;
+        string password = inputPassword != null ? inputPassword.text : string.Empty;
 
         if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
         {
@@ -38,29 +48,62 @@ public class Login : MonoBehaviour
             return;
         }
 
-        btnLogin.interactable = false;
+        isLoggingIn = true;
+        if (btnLogin != null)
+            btnLogin.interactable = false;
         if (txtStatus != null) txtStatus.text = "Đang kiểm tra...";
 
-        var (success, message) = await FirebaseManager.Instance.LoginParentAsync(email, password);
-
-        if (success)
+        try
         {
-            string childId = await FirebaseManager.Instance.ResolveCurrentChildIdAsync();
-            Debug.Log($"<color=green>[Login] Đăng nhập thành công! Child đang dùng: {childId}</color>");
-            txtStatus.text = "Đăng nhập thành công!";
-            txtStatus.color = Color.green;
+            FirebaseManager manager = FirebaseManager.Instance;
+            if (manager == null)
+                throw new InvalidOperationException("Không tìm thấy FirebaseManager trong scene.");
 
-            // SceneManager.LoadScene("Parent");
-            mode.SetActive(true);
-            login.SetActive(false);
+            var (success, message) = await manager.LoginParentAsync(email, password);
+            if (this == null)
+                return;
 
+            if (success)
+            {
+                if (txtStatus != null)
+                {
+                    txtStatus.text = "Đăng nhập thành công!";
+                    txtStatus.color = Color.green;
+                }
+                if (mode != null)
+                    mode.SetActive(true);
+                if (login != null)
+                    login.SetActive(false);
+            }
+            else
+            {
+                if (txtStatus != null)
+                {
+                    txtStatus.text = message;
+                    txtStatus.color = Color.red;
+                }
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Debug.Log("Tài khoản chưa tồn tại");
-            if (txtStatus != null) txtStatus.text = "Tài khoản chưa tồn tại";
-            txtStatus.color = Color.red;
-            btnLogin.interactable = true;
+            if (this != null)
+            {
+                Debug.LogWarning($"[Login] {ex.Message}");
+                if (txtStatus != null)
+                {
+                    txtStatus.text = "Không thể đăng nhập. Kiểm tra kết nối rồi thử lại.";
+                    txtStatus.color = Color.red;
+                }
+            }
+        }
+        finally
+        {
+            if (this != null)
+            {
+                isLoggingIn = false;
+                if (btnLogin != null)
+                    btnLogin.interactable = true;
+            }
         }
     }
 }

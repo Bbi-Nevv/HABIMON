@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
+using HABIMON.Core;
 
 namespace HABIMON.Chatbot
 {
@@ -28,6 +28,8 @@ namespace HABIMON.Chatbot
         public string documentId;
         public string title;
         public string description;
+        public string scheduleKind;
+        public string scheduleValue;
         public string timeTarget;
         public int[] repeatDays;
         public int rewardGold;
@@ -106,7 +108,7 @@ namespace HABIMON.Chatbot
                 {
                     title = habit.title,
                     description = habit.description,
-                    schedule = BuildSchedule(habit.timeTarget),
+                    schedule = BuildSchedule(habit.scheduleKind, habit.scheduleValue, habit.timeTarget),
                     repeatDays = habit.repeatDays == null ? null : (int[])habit.repeatDays.Clone(),
                     rewardGold = habit.rewardGold,
                     rewardExp = habit.rewardExp,
@@ -119,34 +121,21 @@ namespace HABIMON.Chatbot
             return result.ToArray();
         }
 
-        private static ChatHabitScheduleContext BuildSchedule(string timeTarget)
+        private static ChatHabitScheduleContext BuildSchedule(string scheduleKind, string scheduleValue, string timeTarget)
         {
-            if (string.IsNullOrWhiteSpace(timeTarget))
+            if (string.IsNullOrWhiteSpace(scheduleKind) && string.IsNullOrWhiteSpace(scheduleValue) &&
+                string.IsNullOrWhiteSpace(timeTarget))
                 return null;
 
-            string value = timeTarget.Trim();
-            string period = value.ToLowerInvariant() switch
+            HabitSchedule schedule = HabitSchedule.FromStorage(scheduleKind, scheduleValue, timeTarget);
+            if (string.IsNullOrWhiteSpace(schedule.Value))
+                return null;
+
+            return new ChatHabitScheduleContext
             {
-                "buổi sáng" => "morning",
-                "buổi chiều" => "afternoon",
-                "buổi tối" => "evening",
-                _ => null
+                kind = schedule.Kind,
+                value = schedule.Value
             };
-            if (period != null)
-                return new ChatHabitScheduleContext { kind = "day_period", value = period };
-
-            string[] timeFormats = { @"h\:mm", @"hh\:mm" };
-            if (TimeSpan.TryParseExact(value, timeFormats, CultureInfo.InvariantCulture, out TimeSpan time) &&
-                time >= TimeSpan.Zero && time < TimeSpan.FromDays(1))
-            {
-                return new ChatHabitScheduleContext
-                {
-                    kind = "local_time",
-                    value = time.ToString(@"hh\:mm", CultureInfo.InvariantCulture)
-                };
-            }
-
-            return new ChatHabitScheduleContext { kind = "unclassified", value = value };
         }
 
         private static ChatHabitLogContext[] BuildLogsForHabit(

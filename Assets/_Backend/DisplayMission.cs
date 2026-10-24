@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HABIMON.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,8 +17,11 @@ public class DisplayMission : MonoBehaviour
     [SerializeField] private Button afternoonButton;
     [SerializeField] private Button eveningButton;
     [SerializeField] private List<Sprite> iconSprites;
+    [SerializeField] private Sprite fallbackIcon;
+    [SerializeField] private Sprite bookIcon;
 
     private readonly List<HabitModel> allHabits = new List<HabitModel>();
+    private readonly Dictionary<string, HabitLogModel> todayLogsByHabit = new Dictionary<string, HabitLogModel>();
     private string currentPeriod = "Tất cả";
     private string loadedParentId = string.Empty;
     private string loadedChildId = string.Empty;
@@ -52,16 +57,35 @@ public class DisplayMission : MonoBehaviour
 
     private async Task LoadHabitsAsync()
     {
-        if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null)
         {
             Debug.LogWarning("[DisplayMission] Firebase chưa sẵn sàng.");
             return;
         }
 
-        string parentId = FirebaseManager.Instance.GetCurrentParentId();
-        string childId = await FirebaseManager.Instance.ResolveCurrentChildIdAsync();
+        if (!await manager.EnsureInitializedAsync())
+        {
+            Debug.LogError($"[DisplayMission] Firebase initialization failed: {manager.InitializationError}");
+            return;
+        }
 
-        if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId))
+        string parentId = manager.GetCurrentParentId();
+        string childId = manager.GetCurrentChildId();
+        if (string.IsNullOrEmpty(childId))
+        {
+            try
+            {
+                childId = await manager.ResolveCurrentChildIdAsync();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[DisplayMission] Không thể xác định trẻ đang chọn: {ex.Message}");
+                return;
+            }
+        }
+
+        if (string.IsNullOrEmpty(parentId) || parentId != manager.GetCurrentParentId() || string.IsNullOrEmpty(childId))
         {
             Debug.LogWarning("[DisplayMission] Thiếu ParentId hoặc ChildId để tải nhiệm vụ.");
             return;
@@ -74,29 +98,67 @@ public class DisplayMission : MonoBehaviour
     {
         int requestVersion = ++habitLoadVersion;
 
-        if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null)
         {
             Debug.LogWarning("[DisplayMission] Firebase chưa sẵn sàng.");
             return;
         }
 
-        string parentId = FirebaseManager.Instance.GetCurrentParentId();
+        if (!await manager.EnsureInitializedAsync())
+        {
+            Debug.LogError($"[DisplayMission] Firebase initialization failed: {manager.InitializationError}");
+            return;
+        }
+
+        string parentId = manager.GetCurrentParentId();
+        int sessionGeneration = manager.SessionGeneration;
         if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId))
         {
             Debug.LogWarning("[DisplayMission] Thiếu ParentId hoặc ChildId để tải nhiệm vụ.");
             return;
         }
 
-        var habits = await FirebaseManager.Instance.GetHabitsAsync(parentId, childId);
-        if (requestVersion != habitLoadVersion)
-            return;
+        if (loadedParentId != parentId || loadedChildId != childId)
+        {
+            loadedParentId = parentId;
+            loadedChildId = childId;
+            allHabits.Clear();
+            todayLogsByHabit.Clear();
+            ClearItems();
+        }
 
-        allHabits.Clear();
-        allHabits.AddRange(habits.Where(h => h != null));
-        loadedParentId = parentId;
-        loadedChildId = childId;
+        try
+        {
+            Task<List<HabitModel>> habitsTask = manager.GetHabitsAsync(parentId, childId);
+            Task<List<HabitLogModel>> logsTask = manager.GetHabitLogsForDateAsync(
+                parentId, childId, HabitLog.GetTodayDateKey());
+            await Task.WhenAll(habitsTask, logsTask);
+            if (this == null || requestVersion != habitLoadVersion ||
+                FirebaseManager.Instance != manager ||
+                manager.SessionGeneration != sessionGeneration ||
+                manager.GetCurrentParentId() != parentId || manager.GetCurrentChildId() != childId)
+                return;
 
-        ShowByPeriod(currentPeriod);
+            allHabits.Clear();
+            allHabits.AddRange(habitsTask.Result.Where(h => h != null));
+            todayLogsByHabit.Clear();
+            string todayKey = HabitLog.GetTodayDateKey();
+            foreach (HabitLogModel log in logsTask.Result)
+            {
+                if (log != null && log.dateKey == todayKey && !string.IsNullOrEmpty(log.habitId))
+                    todayLogsByHabit[log.habitId] = log;
+            }
+            loadedParentId = parentId;
+            loadedChildId = childId;
+
+            ShowByPeriod(currentPeriod);
+        }
+        catch (System.Exception ex)
+        {
+            if (this != null && requestVersion == habitLoadVersion)
+                Debug.LogError($"[DisplayMission] Không thể tải nhiệm vụ: {ex.Message}");
+        }
     }
 
     public void ShowByPeriod(string period)
@@ -110,15 +172,17 @@ public class DisplayMission : MonoBehaviour
             return;
         }
 
+        DateTime businessDate = HabitLog.GetBusinessDate(DateTimeOffset.UtcNow);
         foreach (var habit in allHabits)
         {
             if (habit == null)
                 continue;
 
-            if (!habit.isActive)
+            if (!HabitLog.IsScheduledForDate(habit, businessDate))
                 continue;
 
-            if (!IsAllPeriod(period) && !MatchesPeriod(habit.timeTarget, period))
+            if (!IsAllPeriod(period) &&
+                !HabitSchedule.FromStorage(habit.scheduleKind, habit.scheduleValue, habit.timeTarget).MatchesPeriod(period))
                 continue;
 
             SpawnItem(habit, loadedParentId, loadedChildId);
@@ -129,32 +193,6 @@ public class DisplayMission : MonoBehaviour
     {
         return string.Equals(period?.Trim(), "Tất cả", System.StringComparison.OrdinalIgnoreCase)
             || string.Equals(period?.Trim(), "All", System.StringComparison.OrdinalIgnoreCase);
-    }
-
-    private bool MatchesPeriod(string timeTarget, string targetPeriod)
-    {
-        if (string.IsNullOrWhiteSpace(timeTarget))
-            return false;
-
-        string target = targetPeriod?.Trim();
-        string input = timeTarget.Trim();
-
-        if (string.IsNullOrEmpty(target))
-            return false;
-
-        var normalizedTarget = target.ToLowerInvariant();
-        var normalizedInput = input.ToLowerInvariant();
-
-        if (normalizedTarget.Contains("sáng") || normalizedTarget.Contains("morning"))
-            return normalizedInput.Contains("sáng") || normalizedInput.Contains("morning");
-
-        if (normalizedTarget.Contains("chiều") || normalizedTarget.Contains("afternoon"))
-            return normalizedInput.Contains("chiều") || normalizedInput.Contains("afternoon");
-
-        if (normalizedTarget.Contains("tối") || normalizedTarget.Contains("evening") || normalizedTarget.Contains("night"))
-            return normalizedInput.Contains("tối") || normalizedInput.Contains("evening") || normalizedInput.Contains("night");
-
-        return normalizedInput == normalizedTarget;
     }
 
     private void ClearItems()
@@ -207,6 +245,8 @@ public class DisplayMission : MonoBehaviour
             Sprite foundIcon = GetSpriteByKey(habit.icon);
             if (foundIcon != null)
                 iconImage.sprite = foundIcon;
+            else if (fallbackIcon != null)
+                iconImage.sprite = fallbackIcon;
             else if (iconSprites != null && iconSprites.Count > 0)
                 iconImage.sprite = iconSprites[0];
         }
@@ -215,7 +255,8 @@ public class DisplayMission : MonoBehaviour
         {
             if (!string.IsNullOrEmpty(parentId) && !string.IsNullOrEmpty(childId) && !string.IsNullOrEmpty(habit.id))
             {
-                _ = ApplyToggleStateAsync(toggle, statusText, parentId, childId, habit);
+                todayLogsByHabit.TryGetValue(habit.id, out HabitLogModel todayLog);
+                ConfigureToggle(toggle, statusText, parentId, childId, habit, todayLog);
             }
             else
             {
@@ -226,14 +267,20 @@ public class DisplayMission : MonoBehaviour
         }
     }
 
-    private async Task ApplyToggleStateAsync(Toggle toggle, TMP_Text statusText, string parentId, string childId, HabitModel habit)
+    private void ConfigureToggle(
+        Toggle toggle,
+        TMP_Text statusText,
+        string parentId,
+        string childId,
+        HabitModel habit,
+        HabitLogModel todayLog)
     {
         if (toggle == null || habit == null)
             return;
 
-        HabitLogModel todayLog = await HabitLog.GetTodayHabitLogAsync(parentId, childId, habit.id);
         bool isCompleted = todayLog != null && todayLog.isCompleted;
         bool canEditToday = todayLog == null || HabitLog.CanEditToday(todayLog.dateKey);
+        bool requiresApproval = todayLog?.requiresApprovalAtCompletion ?? habit.requireApproval;
 
         toggle.onValueChanged.RemoveAllListeners();
         toggle.SetIsOnWithoutNotify(isCompleted);
@@ -245,6 +292,8 @@ public class DisplayMission : MonoBehaviour
                 statusText.text = "Đã khóa lịch sử ngày cũ";
             else if (todayLog == null)
                 statusText.text = "Chưa hoàn thành";
+            else if (isCompleted && requiresApproval && !todayLog.isApproved)
+                statusText.text = "Đã gửi chờ phụ huynh duyệt";
             else if (isCompleted)
                 statusText.text = "Đã hoàn thành hôm nay";
             else
@@ -253,23 +302,76 @@ public class DisplayMission : MonoBehaviour
 
         toggle.onValueChanged.AddListener(async isOn =>
         {
-            bool success = await HabitLog.ToggleHabitForTodayAsync(parentId, childId, habit.id, isOn);
+            FirebaseManager manager = FirebaseManager.Instance;
+            if (manager == null || manager.GetCurrentParentId() != parentId || manager.GetCurrentChildId() != childId)
+                return;
+
+            int sessionGeneration = manager.SessionGeneration;
+            bool previousValue = !isOn;
+            toggle.interactable = false;
+            bool success = false;
+            try
+            {
+                success = await HabitLog.ToggleHabitForTodayAsync(parentId, childId, habit.id, isOn);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[DisplayMission] Không thể lưu trạng thái thói quen: {ex.Message}");
+            }
+
+            if (this == null || toggle == null || manager != FirebaseManager.Instance ||
+                manager.SessionGeneration != sessionGeneration || manager.GetCurrentChildId() != childId)
+                return;
+
+            toggle.interactable = canEditToday;
             if (!success)
             {
-                toggle.SetIsOnWithoutNotify(!isOn);
+                toggle.SetIsOnWithoutNotify(previousValue);
                 if (statusText != null)
-                    statusText.text = "Không thể sửa vì quá ngày";
+                    statusText.text = "Không thể lưu. Vui lòng thử lại.";
                 return;
             }
 
+            if (isOn)
+            {
+                todayLog = new HabitLogModel
+                {
+                    habitId = habit.id,
+                    dateKey = HabitLog.GetTodayDateKey(),
+                    isCompleted = true,
+                    completedAt = Firebase.Firestore.Timestamp.GetCurrentTimestamp(),
+                    isApproved = !habit.requireApproval,
+                    requiresApprovalAtCompletion = habit.requireApproval,
+                    rewardGoldAtCompletion = habit.rewardGold,
+                    rewardExpAtCompletion = habit.rewardExp,
+                    rewardGranted = !habit.requireApproval,
+                    rewardGoldGranted = habit.requireApproval ? 0 : habit.rewardGold,
+                    rewardExpGranted = habit.requireApproval ? 0 : habit.rewardExp
+                };
+                todayLogsByHabit[habit.id] = todayLog;
+            }
+            else
+            {
+                todayLogsByHabit.Remove(habit.id);
+            }
+
             if (statusText != null)
-                statusText.text = isOn ? "Đã hoàn thành hôm nay" : "Chưa hoàn thành hôm nay";
+                statusText.text = isOn
+                    ? (habit.requireApproval ? "Đã gửi chờ phụ huynh duyệt" : "Đã hoàn thành hôm nay")
+                    : "Chưa hoàn thành hôm nay";
         });
     }
 
     private Sprite GetSpriteByKey(string iconKey)
     {
-        if (string.IsNullOrEmpty(iconKey) || iconSprites == null)
+        if (string.IsNullOrEmpty(iconKey))
+            return null;
+
+        if (string.Equals(iconKey, "icon_book", System.StringComparison.OrdinalIgnoreCase))
+            return bookIcon != null ? bookIcon : fallbackIcon;
+        if (string.Equals(iconKey, "icon_default", System.StringComparison.OrdinalIgnoreCase))
+            return fallbackIcon;
+        if (iconSprites == null)
             return null;
 
         foreach (var sprite in iconSprites)

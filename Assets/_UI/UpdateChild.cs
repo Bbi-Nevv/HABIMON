@@ -46,8 +46,6 @@ public class UpdateChild : MonoBehaviour
             cancelButton.onClick.AddListener(ClosePopup);
         }
 
-        if (popupPanel != null)
-            popupPanel.SetActive(false);
     }
 
     private void OnDestroy()
@@ -65,7 +63,13 @@ public class UpdateChild : MonoBehaviour
             return;
 
         FirebaseManager firebaseManager = FirebaseManager.Instance;
-        if (firebaseManager == null || !firebaseManager.IsInitialized)
+        if (firebaseManager == null)
+        {
+            SetPopupStatus("Firebase chưa sẵn sàng.");
+            return;
+        }
+
+        if (!await firebaseManager.EnsureInitializedAsync())
         {
             SetPopupStatus("Firebase chưa sẵn sàng.");
             return;

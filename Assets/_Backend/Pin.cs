@@ -24,6 +24,8 @@ public class Pin : MonoBehaviour
 	[SerializeField] private TMP_Text verifyStatusText;
 
 	private int failedAttempts;
+	private bool isVerifying;
+	private bool isChanging;
 
 	private void Awake()
 	{
@@ -45,10 +47,11 @@ public class Pin : MonoBehaviour
 
 	public void OpenVerifyPopup()
 	{
-		failedAttempts = 0;
+		if (!isVerifying)
+			failedAttempts = 0;
 
 		if (verifyPinButton != null)
-			verifyPinButton.interactable = true;
+			verifyPinButton.interactable = !isVerifying;
 
 		if (verifyPinInput != null)
 			verifyPinInput.text = string.Empty;
@@ -67,9 +70,13 @@ public class Pin : MonoBehaviour
 
 	private async void OnVerifyPinClicked()
 	{
-		if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+		if (isVerifying)
+			return;
+
+		FirebaseManager manager = FirebaseManager.Instance;
+		if (manager == null)
 		{
-			SetStatus(verifyStatusText, "Firebase chưa sẵn sàng.", Color.red);
+			SetStatus(verifyStatusText, "Không tìm thấy FirebaseManager.", Color.red);
 			return;
 		}
 
@@ -81,30 +88,64 @@ public class Pin : MonoBehaviour
 			return;
 		}
 
-		bool verified = await FirebaseManager.Instance.VerifyParentPinAsync(pin);
-		if (verified)
+		isVerifying = true;
+		if (verifyPinButton != null)
+			verifyPinButton.interactable = false;
+		try
 		{
-			SceneManager.LoadScene(ParentSceneName);
-			return;
-		}
+			if (!await manager.EnsureInitializedAsync())
+			{
+				SetStatus(verifyStatusText, "Firebase chưa sẵn sàng.", Color.red);
+				return;
+			}
 
-		failedAttempts++;
-		if (failedAttempts >= MaxAttempts)
+			if (!await manager.HasParentPinAsync())
+			{
+				SetStatus(verifyStatusText, "Mã phụ huynh chưa được thiết lập. Vui lòng mở chế độ phụ huynh để tạo mã.", Color.red);
+				return;
+			}
+
+			bool verified = await manager.VerifyParentPinAsync(pin);
+			if (verified)
+			{
+				SceneManager.LoadScene(ParentSceneName);
+				return;
+			}
+
+			failedAttempts++;
+			if (failedAttempts >= MaxAttempts)
+			{
+				SetStatus(verifyStatusText, "Bạn đã nhập sai PIN 3 lần.", Color.red);
+				return;
+			}
+
+			SetStatus(verifyStatusText, $"PIN không đúng. Còn {MaxAttempts - failedAttempts} lần thử.", Color.red);
+		}
+		catch (System.Exception ex)
 		{
-			SetStatus(verifyStatusText, "Bạn đã nhập sai PIN 3 lần.", Color.red);
-			if (verifyPinButton != null)
-				verifyPinButton.interactable = false;
-			return;
+			Debug.LogError($"[Pin] Không thể kiểm tra mã phụ huynh: {ex.Message}");
+			SetStatus(verifyStatusText, "Không thể kiểm tra mã. Vui lòng thử lại.", Color.red);
 		}
-
-		SetStatus(verifyStatusText, $"PIN không đúng. Còn {MaxAttempts - failedAttempts} lần thử.", Color.red);
+		finally
+		{
+			if (this != null)
+			{
+				isVerifying = false;
+				if (verifyPinButton != null && failedAttempts < MaxAttempts)
+					verifyPinButton.interactable = true;
+			}
+		}
 	}
 
 	private async void OnChangePinClicked()
 	{
-		if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+		if (isChanging)
+			return;
+
+		FirebaseManager manager = FirebaseManager.Instance;
+		if (manager == null)
 		{
-			SetStatus(changeStatusText, "Firebase chưa sẵn sàng.", Color.red);
+			SetStatus(changeStatusText, "Không tìm thấy FirebaseManager.", Color.red);
 			return;
 		}
 
@@ -112,9 +153,9 @@ public class Pin : MonoBehaviour
 		string newPin = newPinInput != null ? newPinInput.text.Trim() : string.Empty;
 		string confirmPin = confirmPinInput != null ? confirmPinInput.text.Trim() : string.Empty;
 
-		if (!IsValidPin(currentPin) || !IsValidPin(newPin) || !IsValidPin(confirmPin))
+		if (!IsValidPin(newPin) || !IsValidPin(confirmPin))
 		{
-			SetStatus(changeStatusText, "Mỗi mã PIN phải gồm đúng 4 chữ số.", Color.red);
+			SetStatus(changeStatusText, "Mã PIN mới phải gồm đúng 4 chữ số.", Color.red);
 			return;
 		}
 
@@ -124,23 +165,51 @@ public class Pin : MonoBehaviour
 			return;
 		}
 
+		isChanging = true;
 		if (changePinButton != null)
 			changePinButton.interactable = false;
-
-		bool changed = await FirebaseManager.Instance.ChangeParentPinAsync(currentPin, newPin);
-
-		if (changed)
+		try
 		{
-			SetStatus(changeStatusText, "Đổi mã PIN thành công.", Color.green);
-			ClearChangeInputs();
-		}
-		else
-		{
-			SetStatus(changeStatusText, "Mã PIN hiện tại không đúng hoặc hệ thống chưa sẵn sàng.", Color.red);
-		}
+			if (!await manager.EnsureInitializedAsync())
+			{
+				SetStatus(changeStatusText, "Firebase chưa sẵn sàng.", Color.red);
+				return;
+			}
 
-		if (changePinButton != null)
-			changePinButton.interactable = true;
+			bool hasPin = await manager.HasParentPinAsync();
+			if ((hasPin && !IsValidPin(currentPin)) || (!hasPin && !string.IsNullOrEmpty(currentPin)))
+			{
+				SetStatus(changeStatusText, hasPin
+					? "Mã PIN hiện tại phải gồm đúng 4 chữ số."
+					: "Chưa có mã hiện tại. Để trống ô này để tạo mã phụ huynh.", Color.red);
+				return;
+			}
+
+			bool changed = await manager.ChangeParentPinAsync(currentPin, newPin);
+			if (changed)
+			{
+				SetStatus(changeStatusText, "Lưu mã phụ huynh thành công.", Color.green);
+				ClearChangeInputs();
+			}
+			else
+			{
+				SetStatus(changeStatusText, "Mã hiện tại không đúng hoặc không thể lưu.", Color.red);
+			}
+		}
+		catch (System.Exception ex)
+		{
+			Debug.LogError($"[Pin] Không thể lưu mã phụ huynh: {ex.Message}");
+			SetStatus(changeStatusText, "Không thể lưu mã phụ huynh. Vui lòng thử lại.", Color.red);
+		}
+		finally
+		{
+			if (this != null)
+			{
+				isChanging = false;
+				if (changePinButton != null)
+					changePinButton.interactable = true;
+			}
+		}
 	}
 
 	private static bool IsValidPin(string pin)

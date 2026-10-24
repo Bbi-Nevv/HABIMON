@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class Childrent : MonoBehaviour
@@ -15,6 +17,15 @@ public class Childrent : MonoBehaviour
     [SerializeField] private UpdateChild updateChildPopup;
     [SerializeField] private GameObject Mission;
 
+    private int childrenLoadVersion;
+    private FirebaseManager subscribedManager;
+    private readonly Dictionary<string, float> pendingDeleteConfirmations = new Dictionary<string, float>();
+
+    private void OnEnable()
+    {
+        SubscribeToSession();
+    }
+
     private async void Start()
     {
         if (addHabitPopup == null)
@@ -23,41 +34,108 @@ public class Childrent : MonoBehaviour
         if (updateChildPopup == null)
             updateChildPopup = FindFirstObjectByType<UpdateChild>(FindObjectsInactive.Include);
 
+        SubscribeToSession();
         await LoadChildrenAsync();
     }
 
-    public async Task LoadChildrenAsync()
+    private void OnDisable()
     {
+        childrenLoadVersion++;
+        if (subscribedManager != null)
+        {
+            subscribedManager.SessionChanged -= OnSessionChanged;
+            subscribedManager = null;
+        }
+    }
+
+    private void SubscribeToSession()
+    {
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null || subscribedManager == manager)
+            return;
+
+        if (subscribedManager != null)
+            subscribedManager.SessionChanged -= OnSessionChanged;
+        subscribedManager = manager;
+        subscribedManager.SessionChanged += OnSessionChanged;
+    }
+
+    private void OnSessionChanged()
+    {
+        ClearChildren();
+        if (Mission != null)
+            Mission.SetActive(false);
+
+        if (subscribedManager != null && subscribedManager.CurrentUser != null)
+            _ = LoadChildrenAsync();
+    }
+
+    public async Task<bool> LoadChildrenAsync()
+    {
+        int requestVersion = ++childrenLoadVersion;
         FirebaseManager firebaseManager = FirebaseManager.Instance;
-        if (firebaseManager == null || !firebaseManager.IsInitialized)
+        if (firebaseManager == null)
         {
             Debug.LogWarning("[Childrent] Firebase chưa sẵn sàng.");
-            return;
+            return false;
+        }
+
+        if (!await firebaseManager.EnsureInitializedAsync())
+        {
+            Debug.LogError($"[Childrent] Firebase initialization failed: {firebaseManager.InitializationError}");
+            return false;
         }
 
         if (childPrefab == null || contentTransform == null)
         {
             Debug.LogWarning("[Childrent] Chưa gán childPrefab hoặc contentTransform.");
-            return;
+            return false;
         }
 
         string parentId = firebaseManager.GetCurrentParentId();
         if (string.IsNullOrEmpty(parentId))
         {
             Debug.LogWarning("[Childrent] Không xác định được phụ huynh đang đăng nhập.");
-            return;
+            return false;
         }
 
-        ClearChildren();
-        List<ChildModel> children = await firebaseManager.GetChildrenAsync(parentId);
-        foreach (ChildModel child in children)
+        List<ChildModel> children;
+        try
         {
-            SpawnChildItem(child, firebaseManager);
+            children = await firebaseManager.GetChildrenAsync(parentId);
+        }
+        catch (Exception ex)
+        {
+            if (this != null && requestVersion == childrenLoadVersion)
+                Debug.LogError($"[Childrent] Không thể tải danh sách trẻ: {ex.Message}");
+            return false;
+        }
+
+        if (this == null || requestVersion != childrenLoadVersion ||
+            FirebaseManager.Instance != firebaseManager ||
+            parentId != firebaseManager.GetCurrentParentId())
+            return false;
+
+        try
+        {
+            ClearChildren();
+            foreach (ChildModel child in children)
+                SpawnChildItem(child, firebaseManager);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            if (this != null && requestVersion == childrenLoadVersion)
+                Debug.LogError($"[Childrent] Không thể hiển thị danh sách trẻ: {ex.Message}");
+            return false;
         }
     }
 
     private void ClearChildren()
     {
+        if (contentTransform == null)
+            return;
+
         for (int index = contentTransform.childCount - 1; index >= 0; index--)
         {
             Destroy(contentTransform.GetChild(index).gameObject);
@@ -76,7 +154,23 @@ public class Childrent : MonoBehaviour
 
         if (texts.Length > 1)
         {
-            string age = child.age > 0 ? $"{child.age} tuổi" : "Chưa cập nhật tuổi";
+            string age;
+            if (child.age <= 0)
+            {
+                age = "Chưa cập nhật tuổi";
+            }
+            else if (child.ageAsOf.HasValue)
+            {
+                DateTimeOffset ageDate = new DateTimeOffset(child.ageAsOf.Value.ToDateTime().ToUniversalTime())
+                    .ToOffset(TimeSpan.FromHours(7));
+                string ageDateLabel = ageDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+                age = $"{child.age} tuổi (tính đến {ageDateLabel})";
+            }
+            else
+            {
+                age = $"{child.age} tuổi (chưa rõ ngày cập nhật)";
+            }
+
             string gender = child.gender == 0 ? "Nữ" : child.gender == 1 ? "Nam" : "Chưa cập nhật";
             texts[1].text = $"{age}, {gender}";
         }
@@ -87,7 +181,8 @@ public class Childrent : MonoBehaviour
             childImage.sprite = genderSprites[child.gender];
         }
 
-        if (updateChildPopup != null && !string.IsNullOrEmpty(child.childId))
+        bool isParentMode = SceneManager.GetActiveScene().name == "Parent";
+        if (isParentMode && updateChildPopup != null && !string.IsNullOrEmpty(child.childId))
         {
             Button editButton = item.transform.Find("EditButton")?.GetComponent<Button>();
             if (editButton == null)
@@ -102,12 +197,29 @@ public class Childrent : MonoBehaviour
         if (!string.IsNullOrEmpty(child.childId))
         {
             Button deleteButton = item.transform.Find("DeleteButton")?.GetComponent<Button>();
-            if (deleteButton == null)
+            if (!isParentMode)
+            {
+                if (deleteButton != null)
+                    deleteButton.gameObject.SetActive(false);
+
+                Button editButton = item.transform.Find("EditButton")?.GetComponent<Button>();
+                if (editButton != null)
+                    editButton.gameObject.SetActive(false);
+            }
+            else if (deleteButton == null)
+            {
                 deleteButton = CreateActionButton(item.transform, texts.Length > 0 ? texts[0] : null,
                     "DeleteButton", "Xóa", -12f, new Color(1f, 0.85f, 0.85f));
 
-            deleteButton.onClick = new Button.ButtonClickedEvent();
-            deleteButton.onClick.AddListener(() => OnDeleteChildClicked(child, item, firebaseManager));
+                deleteButton.onClick = new Button.ButtonClickedEvent();
+                deleteButton.onClick.AddListener(() => OnDeleteChildClicked(child, item, firebaseManager));
+            }
+            else if (isParentMode)
+            {
+                deleteButton.gameObject.SetActive(true);
+                deleteButton.onClick = new Button.ButtonClickedEvent();
+                deleteButton.onClick.AddListener(() => OnDeleteChildClicked(child, item, firebaseManager));
+            }
         }
 
         Button button = item.GetComponent<Button>();
@@ -126,6 +238,10 @@ public class Childrent : MonoBehaviour
                     {
                         _ = missionController.LoadHabitsForCurrentUser();
                     }
+
+                    DisplayMission displayMission = Mission.GetComponent<DisplayMission>();
+                    if (displayMission != null)
+                        _ = displayMission.LoadHabitsForChildAsync(child.childId);
                 }
 
                 // if (addHabitPopup != null)
@@ -138,12 +254,25 @@ public class Childrent : MonoBehaviour
 
     private async void OnDeleteChildClicked(ChildModel child, GameObject item, FirebaseManager firebaseManager)
     {
+        if (SceneManager.GetActiveScene().name != "Parent" || child == null || string.IsNullOrEmpty(child.childId))
+            return;
+
+        float now = Time.unscaledTime;
+        if (!pendingDeleteConfirmations.TryGetValue(child.childId, out float expiresAt) || now > expiresAt)
+        {
+            pendingDeleteConfirmations[child.childId] = now + 5f;
+            SetDeleteButtonCaption(item, "Xác nhận xóa");
+            return;
+        }
+
+        pendingDeleteConfirmations.Remove(child.childId);
         Button[] buttons = item.GetComponentsInChildren<Button>(true);
         foreach (Button button in buttons)
             button.interactable = false;
 
         try
         {
+            string parentId = firebaseManager.GetCurrentParentId();
             bool wasCurrentChild = firebaseManager.GetCurrentChildId() == child.childId;
             var (success, message) = await firebaseManager.DeleteChildAsync(child.childId);
             if (!success)
@@ -152,10 +281,11 @@ public class Childrent : MonoBehaviour
                 return;
             }
 
-            if (wasCurrentChild && string.IsNullOrEmpty(firebaseManager.GetCurrentChildId()) && Mission != null)
+            if (firebaseManager.GetCurrentParentId() == parentId && wasCurrentChild &&
+                string.IsNullOrEmpty(firebaseManager.GetCurrentChildId()) && Mission != null)
                 Mission.SetActive(false);
 
-            if (this != null)
+            if (this != null && firebaseManager.GetCurrentParentId() == parentId)
                 await LoadChildrenAsync();
         }
         catch (Exception ex)
@@ -169,7 +299,18 @@ public class Childrent : MonoBehaviour
                 if (button != null)
                     button.interactable = true;
             }
+            SetDeleteButtonCaption(item, "Xóa");
         }
+    }
+
+    private static void SetDeleteButtonCaption(GameObject item, string caption)
+    {
+        if (item == null)
+            return;
+
+        TMP_Text label = item.transform.Find("DeleteButton")?.GetComponentInChildren<TMP_Text>(true);
+        if (label != null)
+            label.text = caption;
     }
 
     private Button CreateActionButton(Transform parent, TMP_Text sourceText,

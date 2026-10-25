@@ -40,7 +40,7 @@ Baseline Nam chạy lại: EditMode 63/63. Regression tests đã tái hiện cá
 
 PlayMode có chạy animation tưới cây thực: StartParticle, StopParticle và StopWatering. EditMode kiểm tra missing scripts trong Menu/Parent/Child và các prefab mới, approval icon subasset và approval flow duy nhất.
 
-Phân tích graph đầy đủ (partial=false, truncated=false) ghi nhận 81 file, 127 symbols và 21 flows qua completion, approval và pending-create; nhãn risk Critical phản ánh phạm vi này, không phải chứng nhận không có lỗi. Kết quả graph phải được kết hợp với source review và runtime tests.
+Kết quả detect_changes trả đủ danh sách 127 symbols và 21 flows (partial=false, truncated=false ở kết quả diff). Tuy nhiên bước lập index GitNexus chỉ báo 119 flows và cảnh báo entry points/callees bị cắt theo budget; số flows là lower bound, không phải coverage toàn bộ. Phạm vi diff bao gồm completion, approval và pending-create; nhãn risk Critical phản ánh phạm vi này, không phải chứng nhận không có lỗi. Kết quả graph phải được kết hợp với source review và runtime tests.
 
 ## Giới hạn còn lại
 
@@ -59,3 +59,5 @@ Cảnh báo Linux: “Invalid texture used for cursor” (yêu cầu RGBA32/read
 Conditional Android compilation dùng các runtime source/references của Unity, có UNITY_ANDROID và bỏ UNITY_EDITOR/UNITY_STANDALONE. Nó kiểm tra nhánh Google/mobile/TTS biên dịch nhưng không kiểm tra Gradle, manifest, signing, native Android ABI hoặc thiết bị.
 
 Unity tự tạo thay đổi batching/analytics, performance resources và xóa dynamic font cache trong quá trình test/build. Những artifact kiểm chứng được dọn riêng; ProjectSettings được giữ như nền, font source được phục hồi nguyên blob main sau khi Editor thoát. Không đưa script build tạm hay thông tin môi trường vào commit.
+
+Sau khi cập nhật Nam, EditMode đã chạy lại ngay tại workspace chính và đạt 69/69. Unity đã tự thay dotnet.defaultSolution theo tên worktree lúc import; cấu hình IDE cuối cùng được giữ lại như nền (HABIMON.slnx), không giữ đường dẫn worktree tạm.

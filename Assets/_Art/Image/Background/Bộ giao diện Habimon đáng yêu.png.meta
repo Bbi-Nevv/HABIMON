@@ -307,7 +307,7 @@ TextureImporter:
         width: 163
         height: 153
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -316,6 +316,28 @@ TextureImporter:
       bones: []
       spriteID: c7a1f145c3c9f4140aac2ec6f2ed4e1f
       internalID: -575114241
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "B\u1ED9 giao di\u1EC7n Habimon \u0111\xE1ng y\xEAu_2"
+      rect:
+        serializedVersion: 2
+        x: 585
+        y: 67
+        width: 272
+        height: 220
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1ed6c5c111a62b542b32baf1ee77b34f
+      internalID: -1333931384
       vertices: []
       indices: 
       edges: []
@@ -336,6 +358,7 @@ TextureImporter:
     nameFileIdTable:
       "B\u1ED9 giao di\u1EC7n Habimon \u0111\xE1ng y\xEAu_0": -7967299065460773474
       "B\u1ED9 giao di\u1EC7n Habimon \u0111\xE1ng y\xEAu_1": 1914797158
+      "B\u1ED9 giao di\u1EC7n Habimon \u0111\xE1ng y\xEAu_2": -1333931384
       "B\u1ED9 giao di\u1EC7n Habimon \u0111\xE1ng y\xEAu_3": -2109831306
       "B\u1ED9 giao di\u1EC7n Habimon \u0111\xE1ng y\xEAu_4": -1187498669
       "B\u1ED9 giao di\u1EC7n Habimon \u0111\xE1ng y\xEAu_5": -520943970

@@ -35,6 +35,7 @@ Danh sách sprite cũ **Accessory Images** vẫn được giữ để không m�
 - Có thể gắn nút tháo đồ vào `EquipmentSlot.Unequip()`.
 - Đóng túi trong lúc kéo sẽ dọn ảnh kéo. Mở lại túi phản ánh đồ monster đang mặc.
 - Trang bị và tháo đồ được lưu PlayerPrefs ngay khi thay đổi; mở lại app sẽ khôi phục.
+- `Inventory.AddItem(Item)` thêm skin mới, chống trùng theo ItemId và lưu quyền sở hữu. **Unlockable Items** là danh sách dữ liệu skin có thể mở khóa, không phải đồ đã sở hữu. Các skin đã nhận từ [thành tựu tưới cây](Achievements.md) được khôi phục trước khi SaveEquipment load trang bị.
 
 ## Lưu trang bị bằng SaveEquipment
 

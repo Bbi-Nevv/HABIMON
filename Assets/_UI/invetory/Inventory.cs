@@ -5,6 +5,8 @@ public class Inventory : MonoBehaviour
 {
     [Header("Owned items")]
     [SerializeField] private List<Item> items = new List<Item>();
+    [Tooltip("Reward items available to restore after they have been unlocked.")]
+    [SerializeField] private List<Item> unlockableItems = new List<Item>();
 
     [Header("Inventory UI")]
     [SerializeField] private InventoryItemView itemPrefab;
@@ -17,12 +19,24 @@ public class Inventory : MonoBehaviour
     [SerializeField] private List<EquipmentSlot> equipmentSlots = new List<EquipmentSlot>();
 
     private readonly List<InventoryItemView> itemViews = new List<InventoryItemView>();
+    private bool initialized;
 
-    public IReadOnlyList<Item> Items => items;
+    public IReadOnlyList<Item> Items
+    {
+        get { Initialize(); return items; }
+    }
     public RectTransform DragRoot => dragRoot;
 
     private void Awake()
     {
+        Initialize();
+    }
+
+    private void Initialize()
+    {
+        if (initialized)
+            return;
+        initialized = true;
         if (monsterAccessories == null)
             monsterAccessories = FindFirstObjectByType<Accessory>();
 
@@ -36,10 +50,72 @@ public class Inventory : MonoBehaviour
         // Allow an inactive scene object to serve as the item template.
         if (itemPrefab != null && contentRoot != null && itemPrefab.transform.IsChildOf(contentRoot))
             itemPrefab.gameObject.SetActive(false);
+
+        foreach (Item item in unlockableItems)
+        {
+            if (item != null && !string.IsNullOrEmpty(item.ItemId) &&
+                PlayerPrefs.GetInt(GetUnlockKey(item), 0) == 1 && !ContainsItem(item))
+                items.Add(item);
+        }
+    }
+
+    public bool ContainsItem(Item item)
+    {
+        Initialize();
+        if (item == null)
+            return false;
+
+        foreach (Item owned in items)
+        {
+            if (owned == item || (owned != null && !string.IsNullOrEmpty(item.ItemId) && owned.ItemId == item.ItemId))
+                return true;
+        }
+        return false;
+    }
+
+    public void RegisterUnlockableItem(Item item)
+    {
+        Initialize();
+        if (item == null || string.IsNullOrEmpty(item.ItemId))
+            return;
+
+        if (!unlockableItems.Contains(item))
+            unlockableItems.Add(item);
+
+        if (PlayerPrefs.GetInt(GetUnlockKey(item), 0) == 1 && !ContainsItem(item))
+        {
+            items.Add(item);
+            RefreshAfterAddingItem();
+        }
+    }
+
+    public bool AddItem(Item item)
+    {
+        Initialize();
+        if (item == null || string.IsNullOrEmpty(item.ItemId) || ContainsItem(item))
+            return false;
+
+        if (!unlockableItems.Contains(item))
+            unlockableItems.Add(item);
+
+        items.Add(item);
+        PlayerPrefs.SetInt(GetUnlockKey(item), 1);
+        PlayerPrefs.Save();
+        RefreshAfterAddingItem();
+        return true;
+    }
+
+    private static string GetUnlockKey(Item item) => "Habimon.Inventory.Unlocked." + item.ItemId;
+
+    private void RefreshAfterAddingItem()
+    {
+        if (isActiveAndEnabled && itemPrefab != null && contentRoot != null)
+            Rebuild();
     }
 
     private void OnEnable()
     {
+        Initialize();
         if (monsterAccessories != null)
             monsterAccessories.EquipmentChanged += HandleEquipmentChanged;
 
@@ -72,6 +148,7 @@ public class Inventory : MonoBehaviour
 
     public void Rebuild()
     {
+        Initialize();
         foreach (InventoryItemView view in itemViews)
         {
             if (view == null)

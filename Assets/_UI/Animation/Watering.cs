@@ -61,6 +61,7 @@ public class Watering : MonoBehaviour
         }
 
         animator.SetBool(IsWateringParameter, true);
+        Achievements.RecordWatering(WaterCost);
     }
 
     public void StopWatering()

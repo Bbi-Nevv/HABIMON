@@ -629,6 +629,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Watering
   animator: {fileID: 182604113}
   waterParticle: {fileID: 1710135745}
+  textToSpeech: {fileID: 8792317647416126544}
 --- !u!1 &188068212
 GameObject:
   m_ObjectHideFlags: 0

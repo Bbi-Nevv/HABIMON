@@ -30,6 +30,17 @@ Thiếu tham chiếu hiệu ứng thì phần thưởng vẫn được lưu và 
 - Số dư dùng chung trên thiết bị giữa các scene/tài khoản và không gọi Firebase. Có thể đọc qua `attendanceCheck.WaterDrops` hoặc hằng `AttendanceCheck.WaterDropsKey`.
 - Đóng panel giữa hiệu ứng sẽ dọn các tween và giọt tạm; mở lại hiển thị số dư đã lưu.
 
+## Tưới cây
+
+- `Watering.StartWatering()` tiêu 2 giọt cho một lần bắt đầu tưới, lưu ngay bằng cùng key PlayerPrefs và cập nhật bộ đếm. Bấm lại trong khi animation đang tưới không tiêu thêm.
+- Có đúng 2 giọt thì tưới được và còn 0 giọt. Có 0 hoặc 1 giọt thì không tưới, không trừ nước và không lưu số âm.
+- Thiếu nước, `Watering` gọi `TextToSpeech.Speak(string)` theo trạng thái điểm danh hôm nay:
+  - Đã điểm danh: “Bé ơi, nước không đủ để tưới nữa rồi! Ngày mai bé quay lại điểm danh để nhận thêm nước nhé!”
+  - Chưa điểm danh: “Bé ơi, mình chưa đủ nước để tưới cây! Bé hãy điểm danh hôm nay để nhận thêm nước nhé!”
+- Trường **Text To Speech** của `Watering` trong scene Child đã được gán. Ở scene khác có thể gán qua Inspector; nếu để trống, component tìm `TextToSpeech` đang hoạt động trong scene.
+- Giọng đọc dùng khả năng Android sẵn có của `TextToSpeech`; trong Unity Editor, lời nhắc hiện trong boxchat và có log thay vì phát giọng đọc.
+- Nếu tiêu nước khi giọt thưởng đang bay, hiệu ứng còn lại được dọn và bộ đếm hiển thị ngay số dư thực tế sau khi trừ.
+
 ## DOTween
 
 Đã thêm DOTween core v1.3.045 từ [bản phát hành chính thức Demigiant](https://dotween.demigiant.com/download.php) vào `Assets/Plugins/Demigiant/DOTween`, kèm tài liệu và thông tin bản quyền gốc. Hiệu ứng dùng các shortcut Transform của core nên không cần module UI hoặc Utility Panel. Xem [tài liệu DOTween](https://dotween.demigiant.com/documentation.php) và [giấy phép](https://dotween.demigiant.com/license.php).
@@ -42,3 +53,5 @@ Thiếu tham chiếu hiệu ứng thì phần thưởng vẫn được lưu và 
 4. Để app chạy qua 00:00 hoặc đưa app xuống nền rồi mở lại vào ngày tiếp theo: nút mở nhận thưởng mới.
 5. Đặt `Time.timeScale = 0`: đồng hồ và hiệu ứng vẫn chạy.
 6. Kiểm tra đường bay ở các tỉ lệ màn hình và chế độ Canvas đang sử dụng.
+7. Thử tưới với số dư 0, 1, 2 và 10: hai trường hợp đầu bị chặn, hai trường hợp sau lần lượt còn 0 và 8. Thử bấm liên tục khi đang tưới để xác nhận chỉ trừ một lần.
+8. Khi thiếu nước, thử cả trạng thái chưa điểm danh và đã điểm danh hôm nay để kiểm tra boxchat; kiểm tra giọng đọc trên Android. Thử tưới khi hiệu ứng nhận nước đang chạy và khi mở lại app để kiểm tra bộ đếm cùng số dư đã lưu.

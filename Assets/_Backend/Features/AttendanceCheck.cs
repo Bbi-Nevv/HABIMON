@@ -41,12 +41,28 @@ public class AttendanceCheck : MonoBehaviour
     private float refreshTimer;
     private bool isAnimating;
 
+    private static event Action WaterBalanceChanged;
+
     // Local device balance, shared across scenes and independent of Firebase accounts.
     public int WaterDrops => Mathf.Max(0, PlayerPrefs.GetInt(WaterDropsKey, 0));
-    public bool CanCheckIn => CanClaimOn(DateTime.Today);
+    public static bool CanCheckInToday => CanClaimOn(DateTime.Today);
+    public bool CanCheckIn => CanCheckInToday;
+
+    public static bool TrySpendWater(int amount)
+    {
+        int balance = Mathf.Max(0, PlayerPrefs.GetInt(WaterDropsKey, 0));
+        if (amount <= 0 || balance < amount)
+            return false;
+
+        PlayerPrefs.SetInt(WaterDropsKey, balance - amount);
+        PlayerPrefs.Save();
+        WaterBalanceChanged?.Invoke();
+        return true;
+    }
 
     private void OnEnable()
     {
+        WaterBalanceChanged += HandleWaterBalanceChanged;
         if (attendanceButton != null)
             attendanceButton.onClick.AddListener(CheckIn);
 
@@ -55,6 +71,7 @@ public class AttendanceCheck : MonoBehaviour
 
     private void OnDisable()
     {
+        WaterBalanceChanged -= HandleWaterBalanceChanged;
         if (attendanceButton != null)
             attendanceButton.onClick.RemoveListener(CheckIn);
 
@@ -105,8 +122,16 @@ public class AttendanceCheck : MonoBehaviour
         PlayerPrefs.SetInt(WaterDropsKey, previousBalance + reward);
         PlayerPrefs.SetString(LastCheckInDateKey, today.ToString(DateFormat, CultureInfo.InvariantCulture));
         PlayerPrefs.Save();
+        WaterBalanceChanged?.Invoke();
 
         PlayRewardAnimation(previousBalance, reward);
+        RefreshUI();
+    }
+
+    private void HandleWaterBalanceChanged()
+    {
+        // Spending during a reward flight must not let its old count overwrite the balance.
+        StopRewardAnimation();
         RefreshUI();
     }
 

@@ -7,6 +7,18 @@ namespace HABIMON.Core.Tests
 {
     public class FirebaseWriteScopeTests
     {
+        [TestCase("")]
+        [TestCase(null)]
+        public void PendingHabitCreateAllowsAnOptionalDescriptionAndKeepsItOnRetry(string description)
+        {
+            var pending = new PendingHabitCreate(new FirebaseWriteScope("parent", "child", 1),
+                "operation", "Read", description, "20:00", "icon_book", "2026-10-25");
+            Assert.That(pending.Description, Is.Empty);
+            var retry = pending.ResumeInSameTarget(new FirebaseWriteScope("parent", "child", 2));
+            Assert.That(retry.Description, Is.Empty);
+            Assert.That(retry.OperationId, Is.EqualTo("operation"));
+        }
+
         [Test]
         public void PendingHabitCreateRetainsOriginalScopeAndPayloadForRetry()
         {

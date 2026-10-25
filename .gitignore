@@ -123,3 +123,7 @@ CLAUDE.md
 /firebase-debug.log
 /firestore-debug.log
 /ui-debug.log
+
+# Retired duplicate Firebase input; use the platform configs.
+/Assets/Data/google-services.json
+/Assets/Data/google-services.json.meta

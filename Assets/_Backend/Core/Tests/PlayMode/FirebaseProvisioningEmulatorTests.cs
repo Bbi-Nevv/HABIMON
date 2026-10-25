@@ -384,8 +384,40 @@ service cloud.firestore {
                 Assert.That(logType.GetProperty("completedAt").GetValue(log), Is.Not.Null);
                 Assert.That(logType.GetProperty("approvedAt").GetValue(log), Is.Null);
 
-                MethodInfo approveLog = rewardServiceType.GetMethod("ApprovePendingLogAsync");
+                MethodInfo approveForChild = rewardServiceType.GetMethod("ApprovePendingLogForChildAsync");
+                Assert.That(approveForChild, Is.Not.Null,
+                    "The multi-child UI needs an explicit-child approval with an expected completion timestamp.");
                 string logId = (string)logType.GetProperty("logId").GetValue(log);
+                object staleCompletedAt = logType.GetProperty("completedAt").GetValue(log);
+                Assert.That(await GetTaskResultAsync(setCompletion.Invoke(null,
+                    new object[] { parentId, childId, "f15_codec_habit", today, false })), Is.EqualTo(true));
+                Assert.That(await GetTaskResultAsync(setCompletion.Invoke(null,
+                    new object[] { parentId, childId, "f15_codec_habit", today, true })), Is.EqualTo(true));
+                object renewedLogs = await GetTaskResultAsync(managerType.GetMethod("GetHabitLogsAsync")
+                    .Invoke(manager, new object[] { parentId, childId }));
+                object renewedLog = ((IEnumerable)renewedLogs).Cast<object>().Single();
+                object expectedCompletedAt = logType.GetProperty("completedAt").GetValue(renewedLog);
+                Assert.That(expectedCompletedAt, Is.Not.EqualTo(staleCompletedAt));
+                Assert.That(await GetTaskResultAsync(approveForChild.Invoke(null,
+                    new[] { (object)parentId, childId, logId, staleCompletedAt })), Is.EqualTo(false),
+                    "A request from before cancel/recomplete must not approve the new completion.");
+                Assert.That(await GetTaskResultAsync(approveForChild.Invoke(null,
+                    new[] { (object)"different-parent", childId, logId, expectedCompletedAt })), Is.EqualTo(false));
+
+                managerType.GetMethod("SetCurrentChildId").Invoke(manager, new object[] { e11ChildOperationId });
+                Assert.That(await GetTaskResultAsync(setCompletion.Invoke(null,
+                    new object[] { parentId, childId, "f15_codec_habit", today, true })), Is.EqualTo(false),
+                    "Child completion must retain the selected-child boundary.");
+                Task<bool> explicitApproval = (Task<bool>)approveForChild.Invoke(null,
+                    new[] { (object)parentId, childId, logId, expectedCompletedAt });
+                Task<bool> repeatedExplicitApproval = (Task<bool>)approveForChild.Invoke(null,
+                    new[] { (object)parentId, childId, logId, expectedCompletedAt });
+                Assert.That(await Task.WhenAll(explicitApproval, repeatedExplicitApproval), Is.All.True,
+                    "The all-child parent list must approve its explicit target without switching the current child.");
+                Assert.That(managerType.GetMethod("GetCurrentChildId").Invoke(manager, null), Is.EqualTo(e11ChildOperationId));
+                managerType.GetMethod("SetCurrentChildId").Invoke(manager, new object[] { childId });
+
+                MethodInfo approveLog = rewardServiceType.GetMethod("ApprovePendingLogAsync");
                 Task<bool> firstApproval = (Task<bool>)approveLog.Invoke(
                     null, new object[] { parentId, childId, logId });
                 Task<bool> concurrentApproval = (Task<bool>)approveLog.Invoke(
@@ -407,6 +439,59 @@ service cloud.firestore {
                 object approvedLog = ((IEnumerable)approvedLogs).Cast<object>().Single();
                 Assert.That(approvedLog.GetType().GetProperty("isApproved").GetValue(approvedLog), Is.EqualTo(true));
                 Assert.That(approvedLog.GetType().GetProperty("rewardGranted").GetValue(approvedLog), Is.EqualTo(true));
+
+                string legacyLogId = today + "_f15_codec_habit";
+                object legacyLog = Activator.CreateInstance(logType);
+                logType.GetProperty("habitId").SetValue(legacyLog, "f15_codec_habit");
+                logType.GetProperty("dateKey").SetValue(legacyLog, today);
+                logType.GetProperty("isCompleted").SetValue(legacyLog, true);
+                logType.GetProperty("completedAt").SetValue(legacyLog, expectedCompletedAt);
+                object logsCollection = GetChildCollection(firestoreType, firestore, parentId, childId, "habit_logs");
+                object legacyReference = logsCollection.GetType().GetMethod("Document", new[] { typeof(string) })
+                    .Invoke(logsCollection, new object[] { legacyLogId });
+                MethodInfo setLegacy = legacyReference.GetType().GetMethods().Single(method =>
+                    method.Name == "SetAsync" && method.GetParameters().Length == 2);
+                await (Task)setLegacy.Invoke(legacyReference, new object[] { legacyLog, null });
+                Assert.That(await GetTaskResultAsync(setCompletion.Invoke(null,
+                    new object[] { parentId, childId, "f15_codec_habit", today, true })), Is.EqualTo(false),
+                    "Conflicting legacy identities must be reconciled before another completion write.");
+                Assert.That(await GetTaskResultAsync(approveForChild.Invoke(null,
+                    new[] { (object)parentId, childId, legacyLogId, expectedCompletedAt })), Is.EqualTo(false),
+                    "A legacy document must not independently grant the canonical day's reward.");
+                Assert.That(await GetTaskResultAsync(approveForChild.Invoke(null,
+                    new[] { (object)parentId, childId, logId, expectedCompletedAt })), Is.EqualTo(false),
+                    "Canonical approval must also stop when a conflicting legacy record exists.");
+                await DeleteFirestoreDocumentAsync(firestoreType, firestore, parentId,
+                    "children", childId, "habit_logs", legacyLogId);
+
+                object autoHabit = Activator.CreateInstance(habitType);
+                habitType.GetProperty("title").SetValue(autoHabit, "Automatic reward fixture");
+                habitType.GetProperty("timeTarget").SetValue(autoHabit, "20:00");
+                habitType.GetProperty("repeatDays").SetValue(autoHabit, new List<int> { 1, 2, 3, 4, 5, 6, 7 });
+                habitType.GetProperty("effectiveFrom").SetValue(autoHabit, today);
+                habitType.GetProperty("isActive").SetValue(autoHabit, true);
+                habitType.GetProperty("rewardGold").SetValue(autoHabit, 3);
+                habitType.GetProperty("rewardExp").SetValue(autoHabit, 110);
+                object autoHabitResult = await GetTaskResultAsync(addHabit.Invoke(manager,
+                    new[] { CreateCurrentWriteScope(manager, managerType), autoHabit, "auto_reward_habit" }));
+                Assert.That((bool)autoHabitResult.GetType().GetField("Item1").GetValue(autoHabitResult), Is.True);
+                Task<bool> autoCompletion = (Task<bool>)setCompletion.Invoke(null,
+                    new object[] { parentId, childId, "auto_reward_habit", today, true });
+                Task<bool> repeatedAutoCompletion = (Task<bool>)setCompletion.Invoke(null,
+                    new object[] { parentId, childId, "auto_reward_habit", today, true });
+                Assert.That(await Task.WhenAll(autoCompletion, repeatedAutoCompletion), Is.All.True);
+                object autoLogs = await GetTaskResultAsync(managerType.GetMethod("GetHabitLogsAsync")
+                    .Invoke(manager, new object[] { parentId, childId }));
+                object autoLog = ((IEnumerable)autoLogs).Cast<object>().Single(item =>
+                    (string)logType.GetProperty("habitId").GetValue(item) == "auto_reward_habit");
+                Assert.That(logType.GetProperty("isApproved").GetValue(autoLog), Is.EqualTo(true));
+                Assert.That(logType.GetProperty("rewardGranted").GetValue(autoLog), Is.EqualTo(true));
+                object autoChildren = await GetTaskResultAsync(managerType.GetMethod("GetChildrenAsync")
+                    .Invoke(manager, new object[] { parentId }));
+                object autoChild = ((IEnumerable)autoChildren).Cast<object>().Single(item =>
+                    (string)item.GetType().GetProperty("childId").GetValue(item) == childId);
+                Assert.That(autoChild.GetType().GetProperty("gold").GetValue(autoChild), Is.EqualTo(14));
+                Assert.That(autoChild.GetType().GetProperty("totalExp").GetValue(autoChild), Is.EqualTo(127));
 
                 string cleanupChildId = Guid.NewGuid().ToString("N");
                 object cleanupChildResult = await GetTaskResultAsync(addChild.Invoke(manager,
@@ -487,6 +572,16 @@ service cloud.firestore {
             Assert.That(task, Is.Not.Null);
             await task;
             return task.GetType().GetProperty("Result").GetValue(task);
+        }
+
+        private static object GetChildCollection(Type firestoreType, object firestore,
+            string parentId, string childId, string collectionName)
+        {
+            object users = firestoreType.GetMethod("Collection").Invoke(firestore, new object[] { "users" });
+            object parent = users.GetType().GetMethod("Document", new[] { typeof(string) }).Invoke(users, new object[] { parentId });
+            object children = parent.GetType().GetMethod("Collection").Invoke(parent, new object[] { "children" });
+            object child = children.GetType().GetMethod("Document", new[] { typeof(string) }).Invoke(children, new object[] { childId });
+            return child.GetType().GetMethod("Collection").Invoke(child, new object[] { collectionName });
         }
 
         private static object CreateCurrentWriteScope(object manager, Type managerType)

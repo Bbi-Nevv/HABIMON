@@ -180,7 +180,7 @@ public class Mission : MonoBehaviour
             string.IsNullOrEmpty(childId) || childId != manager.GetCurrentChildId())
             return null;
 
-        if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(description) ||
+        if (string.IsNullOrEmpty(title) ||
             string.IsNullOrEmpty(timeTarget) || string.IsNullOrWhiteSpace(operationId))
             return null;
 

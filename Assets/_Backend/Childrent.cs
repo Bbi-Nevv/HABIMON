@@ -242,6 +242,9 @@ public class Childrent : MonoBehaviour
                     DisplayMission displayMission = Mission.GetComponent<DisplayMission>();
                     if (displayMission != null)
                         _ = displayMission.LoadHabitsForChildAsync(child.childId);
+                    TMP_Text nameChildText = Mission.transform.Find("NameChild")?.GetComponent<TMP_Text>();
+                    if (nameChildText != null)
+                        nameChildText.text = $"Thói quen của {child.name}";
                 }
 
                 // if (addHabitPopup != null)

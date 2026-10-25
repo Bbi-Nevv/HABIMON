@@ -130,6 +130,107 @@ public class FirebaseManager : MonoBehaviour
         return await childService.GetChildrenAsync(parentId);
     }
 
+    public ListenerRegistration ListenChildren(string parentId, Action<List<ChildModel>> onChanged)
+    {
+        if (!IsInitialized || parentId != GetCurrentParentId() || string.IsNullOrEmpty(parentId) || onChanged == null)
+            return null;
+        int generation = sessionGeneration;
+        return db.Collection("users").Document(parentId).Collection("children").Listen(snapshot =>
+        {
+            if (this != Instance || generation != sessionGeneration || parentId != GetCurrentParentId())
+                return;
+            var children = new List<ChildModel>();
+            foreach (DocumentSnapshot document in snapshot.Documents)
+            {
+                ChildModel child = document.ConvertTo<ChildModel>();
+                child.childId = document.Id;
+                if (!document.ContainsField("gender")) child.gender = -1;
+                children.Add(child);
+            }
+            onChanged(children);
+        });
+    }
+
+    public ListenerRegistration ListenHabits(string parentId, string childId, Action<List<HabitModel>> onChanged)
+    {
+        if (!IsInitialized || parentId != GetCurrentParentId() || string.IsNullOrEmpty(parentId) ||
+            string.IsNullOrEmpty(childId) || onChanged == null)
+            return null;
+        int generation = sessionGeneration;
+        return db.Collection("users").Document(parentId).Collection("children").Document(childId)
+            .Collection("habits").Listen(snapshot =>
+            {
+                if (this != Instance || generation != sessionGeneration || parentId != GetCurrentParentId())
+                    return;
+                var habits = new List<HabitModel>();
+                foreach (DocumentSnapshot document in snapshot.Documents)
+                {
+                    HabitModel habit = document.ConvertTo<HabitModel>();
+                    habit.id = document.Id;
+                    habits.Add(habit);
+                }
+                onChanged(habits);
+            });
+    }
+
+    public ListenerRegistration ListenHabitLogs(string parentId, string childId, Action<List<HabitLogModel>> onChanged)
+    {
+        return ListenHabitLogsQuery(parentId, childId, null, onChanged);
+    }
+
+    public ListenerRegistration ListenHabitLogsForDate(
+        string parentId, string childId, string dateKey, Action<List<HabitLogModel>> onChanged)
+    {
+        if (string.IsNullOrEmpty(dateKey)) return null;
+        return ListenHabitLogsQuery(parentId, childId, dateKey, onChanged);
+    }
+
+    private ListenerRegistration ListenHabitLogsQuery(
+        string parentId, string childId, string dateKey, Action<List<HabitLogModel>> onChanged)
+    {
+        if (!IsInitialized || parentId != GetCurrentParentId() || string.IsNullOrEmpty(parentId) ||
+            string.IsNullOrEmpty(childId) || onChanged == null)
+            return null;
+        int generation = sessionGeneration;
+        Query query = db.Collection("users").Document(parentId).Collection("children").Document(childId)
+            .Collection("habit_logs");
+        if (dateKey != null) query = query.WhereEqualTo("dateKey", dateKey);
+        return query.Listen(snapshot =>
+        {
+            if (this != Instance || generation != sessionGeneration || parentId != GetCurrentParentId())
+                return;
+            var logs = snapshot.Documents.Select(document =>
+            {
+                HabitLogModel log = document.ConvertTo<HabitLogModel>();
+                log.logId = document.Id;
+                return log;
+            });
+            onChanged(logs.GroupBy(log => (log.habitId, log.dateKey)).Select(SelectDailyLog).Where(log => log != null).ToList());
+        });
+    }
+
+    public async Task<HabitLogModel> GetHabitLogAsync(string parentId, string childId, string habitId, string dateKey)
+    {
+        if (string.IsNullOrEmpty(parentId) || parentId != GetCurrentParentId() ||
+            string.IsNullOrEmpty(childId) || string.IsNullOrEmpty(habitId) || string.IsNullOrEmpty(dateKey))
+            return null;
+        int generation = sessionGeneration;
+        List<HabitLogModel> logs = await GetHabitLogsForDateAsync(parentId, childId, dateKey);
+        if (this != Instance || generation != sessionGeneration || parentId != GetCurrentParentId())
+            return null;
+        return SelectDailyLog(logs.Where(log => log.habitId == habitId));
+    }
+
+    private static HabitLogModel SelectDailyLog(IEnumerable<HabitLogModel> logs)
+    {
+        return logs.Where(log => log != null && !string.IsNullOrEmpty(log.habitId) && !string.IsNullOrEmpty(log.dateKey))
+            .OrderByDescending(log => log.logId == HabitLog.GetDailyLogDocumentId(log.habitId, log.dateKey))
+            .ThenByDescending(log => log.rewardGranted)
+            .ThenByDescending(log => log.isApproved)
+            .ThenByDescending(log => log.completedAt)
+            .ThenBy(log => log.logId, StringComparer.Ordinal).FirstOrDefault();
+    }
+
     public async Task<(bool success, string message)> AddChildAsync(PendingChildCreate pending)
     {
         if (pending == null)

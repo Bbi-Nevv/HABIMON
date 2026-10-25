@@ -10,6 +10,8 @@ public class MissionUI : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private GameObject itemPrefab;
     [SerializeField] private Transform contentTransform;
+    [SerializeField] private RectTransform button;
+    [SerializeField] private TMP_Text nameChildText;
     [SerializeField] private List<Sprite> iconSprites;
     [SerializeField] private Sprite fallbackIcon;
     [SerializeField] private Sprite bookIcon;
@@ -64,7 +66,11 @@ public class MissionUI : MonoBehaviour
 
         for (int i = contentTransform.childCount - 1; i >= 0; i--)
         {
-            Destroy(contentTransform.GetChild(i).gameObject);
+            Transform child = contentTransform.GetChild(i);
+            if (button != null && (child == button || button.IsChildOf(child)))
+                continue;
+
+            Destroy(child.gameObject);
         }
     }
 
@@ -79,8 +85,10 @@ public class MissionUI : MonoBehaviour
             Debug.LogWarning("[MissionUI] Chưa gán contentTransform hoặc habit null.");
             return;
         }
-
         GameObject newItem = Instantiate(itemPrefab, contentTransform);
+        if (button != null && button.parent == contentTransform)
+            newItem.transform.SetSiblingIndex(button.GetSiblingIndex());
+
         TMP_Text[] texts = newItem.GetComponentsInChildren<TMP_Text>(true);
 
         Image iconImage = newItem.transform.Find("icon")?.GetComponent<Image>();

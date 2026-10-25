@@ -15,6 +15,27 @@ namespace HABIMON.Scene.PlayMode.Tests
     public class PopupAndChartPlayModeTests
     {
         [UnityTest]
+        public IEnumerator ChildWateringAnimationRunsItsParticleEventsAndReturnsToIdle()
+        {
+            AsyncOperation load = SceneManager.LoadSceneAsync("Child", LoadSceneMode.Single);
+            while (!load.isDone) yield return null;
+            yield return null;
+            MonoBehaviour watering = Resources.FindObjectsOfTypeAll<MonoBehaviour>().First(component =>
+                component != null && component.gameObject.scene.name == "Child" && component.GetType().Name == "Watering");
+            Animator animator = GetField(watering, "animator") as Animator;
+            ParticleSystem particle = GetField(watering, "waterParticle") as ParticleSystem;
+            Assert.That(animator, Is.Not.Null);
+            Assert.That(particle, Is.Not.Null);
+            watering.GetType().GetMethod("StartWatering").Invoke(watering, null);
+            Assert.That(animator.GetBool("isWatering"), Is.True);
+            yield return new WaitForSeconds(3f);
+            Assert.That(particle.isPlaying, Is.True, "The animation must invoke StartParticle.");
+            yield return new WaitForSeconds(5f);
+            Assert.That(animator.GetBool("isWatering"), Is.False, "The animation must invoke StopWatering.");
+            Assert.That(particle.isPlaying, Is.False, "The animation must invoke StopParticle.");
+        }
+
+        [UnityTest]
         public IEnumerator AddChildPopupStaysOpenOnItsFirstActivation()
         {
             yield return LoadParentScene();
@@ -265,8 +286,8 @@ namespace HABIMON.Scene.PlayMode.Tests
         public IEnumerator ParentSceneShowsAndOpensPendingHabitApprovalPanel()
         {
             yield return LoadParentScene();
-            MonoBehaviour controller = FindSceneComponent("HabitApprovalUI");
-            GameObject panel = GetField(controller, "panelRoot") as GameObject;
+            MonoBehaviour controller = FindSceneComponent("ParentConfirm");
+            GameObject panel = GetField(controller, "popupRoot") as GameObject;
             Button openButton = GetField(controller, "openButton") as Button;
 
             Assert.That(panel, Is.Not.Null);

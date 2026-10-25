@@ -19,6 +19,110 @@ namespace HABIMON.Core.Tests
         private const long HomeworkLocalId = -3401245754914414353L;
 
         [Test]
+        public void BuildScenesAndApprovalPrefabsImportWithoutMissingScripts()
+        {
+            foreach (string scenePath in new[] { "Assets/_Scenes/Menu.unity", "Assets/_Scenes/Parent.unity", "Assets/_Scenes/Child.unity" })
+            {
+                Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+                try
+                {
+                    foreach (GameObject root in scene.GetRootGameObjects())
+                        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                            Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject), Is.Zero,
+                                scenePath + ": " + child.name);
+                }
+                finally { EditorSceneManager.CloseScene(scene, true); }
+            }
+            foreach (string path in new[] { "Assets/_Prefab/ParentConfirm.prefab", "Assets/_Prefab/ParentConfirmPopup.prefab", "Assets/_Prefab/ItemAffiliate .prefab" })
+            {
+                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                Assert.That(prefab, Is.Not.Null, path);
+                foreach (Transform child in prefab.GetComponentsInChildren<Transform>(true))
+                    Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject), Is.Zero, path + ": " + child.name);
+            }
+        }
+
+        [Test]
+        public void CompletionSaveSettlementRefreshesReplacementItemsAfterReload()
+        {
+            Type managerType = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("FirebaseManager")).First(x => x != null);
+            Type displayType = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("DisplayMission")).First(x => x != null);
+            PropertyInfo instance = managerType.GetProperty("Instance");
+            object previous = instance.GetValue(null);
+            var managerRoot = new GameObject("SaveSettlementManager");
+            var displayRoot = new GameObject("SaveSettlementDisplay");
+            var toggleRoot = new GameObject("ReplacementToggle", typeof(RectTransform), typeof(Toggle));
+            try
+            {
+                Component manager = managerRoot.AddComponent(managerType);
+                instance.GetSetMethod(true).Invoke(null, new object[] { manager });
+                Component display = displayRoot.AddComponent(displayType);
+                BindingFlags fields = BindingFlags.NonPublic | BindingFlags.Instance;
+                displayType.GetField("subscribedManager", fields).SetValue(display, manager);
+                displayType.GetField("loadedGeneration", fields).SetValue(display, managerType.GetProperty("SessionGeneration").GetValue(manager));
+                displayType.GetField("habitLoadVersion", fields).SetValue(display, 2);
+                displayType.GetField("hasLogSnapshot", fields).SetValue(display, true);
+                Type habitLogType = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("HabitLog")).First(x => x != null);
+                displayType.GetField("loadedDateKey", fields).SetValue(display, habitLogType.GetMethod("GetTodayDateKey").Invoke(null, null));
+                string key = (string)displayType.GetMethod("GetPendingChangeKey", fields).Invoke(display, new object[] { "habit" });
+                IDictionary pending = (IDictionary)displayType.GetField("pendingChanges", fields).GetValue(display);
+                pending.Add(key, true);
+                object view = Activator.CreateInstance(displayType.GetNestedType("MissionItem", BindingFlags.NonPublic), true);
+                Toggle toggle = toggleRoot.GetComponent<Toggle>();
+                toggle.interactable = false;
+                view.GetType().GetField("toggle").SetValue(view, toggle);
+                ((IDictionary)displayType.GetField("visibleItems", fields).GetValue(display)).Add("habit", view);
+                MethodInfo settle = displayType.GetMethod("FinishPendingChange", fields);
+                Assert.That(settle, Is.Not.Null, "Settlement must reconcile replacement items rather than an obsolete request version.");
+                settle.Invoke(display, new object[] { key });
+                Assert.That(pending.Count, Is.Zero);
+                Assert.That(toggle.interactable, Is.True, "The replacement toggle must leave the saving state after the old write settles.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(displayRoot);
+                UnityEngine.Object.DestroyImmediate(managerRoot);
+                UnityEngine.Object.DestroyImmediate(toggleRoot);
+                instance.GetSetMethod(true).Invoke(null, new[] { previous });
+            }
+        }
+
+        [Test]
+        public void ParentUsesOneApprovalFlowAndItsHomeworkIconResolves()
+        {
+            Scene scene = EditorSceneManager.OpenScene("Assets/_Scenes/Parent.unity", OpenSceneMode.Additive);
+            try
+            {
+                Assert.That(FindComponent(scene, "ParentConfirm"), Is.Not.Null);
+                Assert.That(FindComponent(scene, "HabitApprovalUI"), Is.Null,
+                    "Two independent approval flows must not run in the same scene.");
+            }
+            finally { EditorSceneManager.CloseScene(scene, true); }
+            AssertSceneIconReferences("Assets/_Scenes/Parent.unity", "ParentConfirm", "iconSprites", 4);
+        }
+
+        [Test]
+        public void MissionItemsCanSpawnWithoutAnOptionalAddButton()
+        {
+            Type type = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("MissionUI"))
+                .First(t => t != null);
+            var root = new GameObject("MissionUiFixture", typeof(RectTransform));
+            var prefab = new GameObject("MissionItemFixture", typeof(RectTransform));
+            try
+            {
+                Component ui = root.AddComponent(type);
+                type.GetField("contentTransform", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(ui, root.transform);
+                type.GetField("itemPrefab", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(ui, prefab);
+                object habit = Activator.CreateInstance(AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(a => a.GetType("HabitModel")).First(t => t != null));
+                Assert.DoesNotThrow(() => type.GetMethod("SpawnHabitItem")
+                    .Invoke(ui, new object[] { habit, "habit", null, null }));
+                Assert.That(root.transform.childCount, Is.EqualTo(1));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(prefab); }
+        }
+
+        [Test]
         public void ParentAndChildHabitIconListsResolveTheMultipleSpriteSubAsset()
         {
             AssertSceneIconReferences("Assets/_Scenes/Parent.unity", "MissionUI", "iconSprites", 4);

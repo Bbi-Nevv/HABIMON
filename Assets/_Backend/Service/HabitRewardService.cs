@@ -80,12 +80,17 @@ public static class HabitRewardService
 
         try
         {
+            List<DocumentReference> legacyReferences = await GetLegacyDailyReferencesAsync(childRef, habitId, dateKey, logId);
             return await db.RunTransactionAsync(async transaction =>
             {
                 if (!IsCurrentScope(manager, parentId, childId, sessionGeneration))
                     return false;
 
+                if (await HasExistingLegacyLogAsync(transaction, legacyReferences))
+                    return false;
                 DocumentSnapshot logSnapshot = await transaction.GetSnapshotAsync(logRef);
+                if (!IsCurrentScope(manager, parentId, childId, sessionGeneration))
+                    return false;
                 HabitLogModel existingLog = logSnapshot.Exists ? logSnapshot.ConvertTo<HabitLogModel>() : null;
                 if (existingLog != null && existingLog.isCompleted &&
                     (existingLog.rewardGranted || existingLog.isApproved))
@@ -95,6 +100,8 @@ public static class HabitRewardService
                 {
                     if (existingLog == null || !existingLog.isCompleted)
                         return true;
+                    if (!IsCurrentScope(manager, parentId, childId, sessionGeneration) || dateKey != HabitLog.GetTodayDateKey())
+                        return false;
 
                     transaction.Update(logRef, new Dictionary<string, object>
                     {
@@ -127,9 +134,9 @@ public static class HabitRewardService
                 int newGold = 0;
                 int newTotalExp = 0;
 
+                DocumentReference petRef = childRef.Collection("habimon").Document("status");
                 if (rewardGranted)
                 {
-                    DocumentReference petRef = childRef.Collection("habimon").Document("status");
                     DocumentSnapshot childSnapshot = await transaction.GetSnapshotAsync(childRef);
                     DocumentSnapshot petSnapshot = await transaction.GetSnapshotAsync(petRef);
                     if (!childSnapshot.Exists || !petSnapshot.Exists)
@@ -140,6 +147,12 @@ public static class HabitRewardService
                     newGold = checked(child.gold + grantedGold);
                     newTotalExp = checked(child.totalExp + grantedExp);
                     progression = HabitRewardProgression.Apply(pet.level, pet.currentExp, pet.maxExp, grantedExp);
+                }
+
+                if (!IsCurrentScope(manager, parentId, childId, sessionGeneration) || dateKey != HabitLog.GetTodayDateKey())
+                    return false;
+                if (rewardGranted)
+                {
                     transaction.Update(childRef, new Dictionary<string, object>
                     {
                         { "gold", newGold }, { "totalExp", newTotalExp }
@@ -150,7 +163,6 @@ public static class HabitRewardService
                         { "maxExp", progression.MaxExp }
                     });
                 }
-
                 transaction.Set(logRef, CreateCompletedLogValues(
                     existingLog, habit, dateKey, requiresApproval, rewardGranted, grantedGold, grantedExp),
                     SetOptions.MergeAll);
@@ -164,13 +176,26 @@ public static class HabitRewardService
         }
     }
 
-    public static async Task<bool> ApprovePendingLogAsync(string parentId, string childId, string logId)
+    public static Task<bool> ApprovePendingLogAsync(string parentId, string childId, string logId)
     {
-        if (string.IsNullOrWhiteSpace(logId))
+        return ApprovePendingLogCoreAsync(parentId, childId, logId, null, true);
+    }
+
+    public static Task<bool> ApprovePendingLogForChildAsync(
+        string parentId, string childId, string logId, Timestamp expectedCompletedAt)
+    {
+        return ApprovePendingLogCoreAsync(parentId, childId, logId, expectedCompletedAt, false);
+    }
+
+    private static async Task<bool> ApprovePendingLogCoreAsync(
+        string parentId, string childId, string logId, Timestamp? expectedCompletedAt, bool requireSelectedChild)
+    {
+        if (string.IsNullOrWhiteSpace(logId) || string.IsNullOrWhiteSpace(childId) || string.IsNullOrWhiteSpace(parentId))
             return false;
 
-        FirebaseManager manager = await EnsureCurrentScopeAsync(parentId, childId);
-        if (manager == null)
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null || !await manager.EnsureInitializedAsync() || manager.GetCurrentParentId() != parentId ||
+            (requireSelectedChild && manager.GetCurrentChildId() != childId))
             return false;
 
         int sessionGeneration = manager.SessionGeneration;
@@ -179,15 +204,28 @@ public static class HabitRewardService
         DocumentReference logRef = childRef.Collection("habit_logs").Document(logId);
         try
         {
+            DocumentSnapshot candidateSnapshot = await logRef.GetSnapshotAsync();
+            if (!candidateSnapshot.Exists) return false;
+            HabitLogModel candidate = candidateSnapshot.ConvertTo<HabitLogModel>();
+            if (string.IsNullOrWhiteSpace(candidate.habitId) || string.IsNullOrWhiteSpace(candidate.dateKey) ||
+                logId != HabitLog.GetDailyLogDocumentId(candidate.habitId, candidate.dateKey))
+                return false;
+            List<DocumentReference> legacyReferences = await GetLegacyDailyReferencesAsync(
+                childRef, candidate.habitId, candidate.dateKey, logId);
             return await db.RunTransactionAsync(async transaction =>
             {
-                if (!IsCurrentScope(manager, parentId, childId, sessionGeneration))
+                if (!IsApprovalScopeCurrent(manager, parentId, childId, sessionGeneration, requireSelectedChild))
                     return false;
 
+                if (await HasExistingLegacyLogAsync(transaction, legacyReferences))
+                    return false;
                 DocumentSnapshot logSnapshot = await transaction.GetSnapshotAsync(logRef);
                 if (!logSnapshot.Exists)
                     return false;
                 HabitLogModel log = logSnapshot.ConvertTo<HabitLogModel>();
+                if (log.habitId != candidate.habitId || log.dateKey != candidate.dateKey ||
+                    !log.completedAt.HasValue || (expectedCompletedAt.HasValue && log.completedAt != expectedCompletedAt))
+                    return false;
                 if (log.rewardGranted)
                     return log.isApproved;
                 if (!log.isCompleted || log.isApproved || string.IsNullOrWhiteSpace(log.habitId))
@@ -217,6 +255,8 @@ public static class HabitRewardService
                 PetProgressionResult progression = HabitRewardProgression.Apply(
                     pet.level, pet.currentExp, pet.maxExp, rewardExp);
 
+                if (!IsApprovalScopeCurrent(manager, parentId, childId, sessionGeneration, requireSelectedChild))
+                    return false;
                 transaction.Update(logRef, new Dictionary<string, object>
                 {
                     { "isApproved", true }, { "approvedAt", FieldValue.ServerTimestamp },
@@ -242,6 +282,34 @@ public static class HabitRewardService
             Debug.LogError($"[HabitRewardService] Không thể duyệt completion: {ex.Message}");
             return false;
         }
+    }
+
+    private static bool IsApprovalScopeCurrent(
+        FirebaseManager manager, string parentId, string childId, int generation, bool requireSelectedChild)
+    {
+        return manager != null && manager == FirebaseManager.Instance &&
+            manager.SessionGeneration == generation && manager.GetCurrentParentId() == parentId &&
+            (!requireSelectedChild || manager.GetCurrentChildId() == childId);
+    }
+
+    private static async Task<List<DocumentReference>> GetLegacyDailyReferencesAsync(
+        DocumentReference childRef, string habitId, string dateKey, string canonicalId)
+    {
+        QuerySnapshot snapshot = await childRef.Collection("habit_logs")
+            .WhereEqualTo("habitId", habitId).WhereEqualTo("dateKey", dateKey).GetSnapshotAsync();
+        return snapshot.Documents.Where(document => document.Id != canonicalId)
+            .Select(document => document.Reference).ToList();
+    }
+
+    private static async Task<bool> HasExistingLegacyLogAsync(
+        Transaction transaction, List<DocumentReference> references)
+    {
+        foreach (DocumentReference reference in references)
+        {
+            if ((await transaction.GetSnapshotAsync(reference)).Exists)
+                return true;
+        }
+        return false;
     }
 
     private static async Task<FirebaseManager> EnsureCurrentScopeAsync(string parentId, string childId)

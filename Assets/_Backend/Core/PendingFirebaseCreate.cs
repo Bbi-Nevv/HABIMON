@@ -74,7 +74,7 @@ namespace HABIMON.Core
 
             OperationId = Required(operationId, nameof(operationId));
             Title = Required(title, nameof(title));
-            Description = Required(description, nameof(description));
+            Description = description ?? string.Empty;
             TimeTarget = Required(timeTarget, nameof(timeTarget));
             IconKey = Required(iconKey, nameof(iconKey));
             EffectiveFrom = Required(effectiveFrom, nameof(effectiveFrom));

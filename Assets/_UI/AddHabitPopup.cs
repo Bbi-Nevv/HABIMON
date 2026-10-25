@@ -141,7 +141,7 @@ public class AddHabitPopup : MonoBehaviour
                 ? dropdownTimeTarget.options[dropdownTimeTarget.value].text
                 : string.Empty;
 
-        if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(description) || string.IsNullOrEmpty(timeTarget))
+        if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(timeTarget))
         {
             SetStatus("Vui lòng nhập đầy đủ thông tin thói quen.");
             return;

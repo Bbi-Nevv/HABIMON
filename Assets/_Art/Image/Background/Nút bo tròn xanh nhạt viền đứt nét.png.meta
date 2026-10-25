@@ -1,0 +1,275 @@
+fileFormatVersion: 2
+guid: 292e3431efb1f564a91e1edf8196101a
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -2927116836318217494
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_0"
+  - first:
+      213: -41491588587964623
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_1"
+  - first:
+      213: -5583147332594095108
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_2"
+  - first:
+      213: -8948987427344704466
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_3"
+  - first:
+      213: 7948266192973727169
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_4"
+  - first:
+      213: -7795677207324947319
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_5"
+  - first:
+      213: -5012385194697320062
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_6"
+  - first:
+      213: -6506676532436014989
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_7"
+  - first:
+      213: -1626630495437114898
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_8"
+  - first:
+      213: -3027214843571616362
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_9"
+  - first:
+      213: 1037704478351956514
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_10"
+  - first:
+      213: -5776730965303333366
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_11"
+  - first:
+      213: -2087002593577241078
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_12"
+  - first:
+      213: -6037708494573895013
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_13"
+  - first:
+      213: 3257657699609614948
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_14"
+  - first:
+      213: 6728869206484409500
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_15"
+  - first:
+      213: 8608891992151817675
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_16"
+  - first:
+      213: -3822501053305688864
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_17"
+  - first:
+      213: 555248327249674102
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_18"
+  - first:
+      213: -8233099073183893327
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_19"
+  - first:
+      213: -4525168694340605865
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_20"
+  - first:
+      213: 1137497102587118601
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_21"
+  - first:
+      213: 5266909025107214496
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_22"
+  - first:
+      213: 2998747597573295627
+    second: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_23"
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 0
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: iOS
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_0"
+      rect:
+        serializedVersion: 2
+        x: 95
+        y: 221
+        width: 1925
+        height: 311
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: aeaff23febac067d0800000000000000
+      internalID: -2927116836318217494
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_0": -2927116836318217494
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_1": -41491588587964623
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_10": 1037704478351956514
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_11": -5776730965303333366
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_12": -2087002593577241078
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_13": -6037708494573895013
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_14": 3257657699609614948
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_15": 6728869206484409500
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_16": 8608891992151817675
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_17": -3822501053305688864
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_18": 555248327249674102
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_19": -8233099073183893327
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_2": -5583147332594095108
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_20": -4525168694340605865
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_21": 1137497102587118601
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_22": 5266909025107214496
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_23": 2998747597573295627
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_24": 470575862
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_3": -8948987427344704466
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_4": 7948266192973727169
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_5": -7795677207324947319
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_6": -5012385194697320062
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_7": -6506676532436014989
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_8": -1626630495437114898
+      "N\xFAt bo tr\xF2n xanh nh\u1EA1t vi\u1EC1n \u0111\u1EE9t n\xE9t_9": -3027214843571616362
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

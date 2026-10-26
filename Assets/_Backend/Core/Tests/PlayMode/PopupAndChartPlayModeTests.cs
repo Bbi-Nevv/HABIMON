@@ -14,25 +14,84 @@ namespace HABIMON.Scene.PlayMode.Tests
 {
     public class PopupAndChartPlayModeTests
     {
+        private const string WaterDropsKey = "Habimon.Attendance.WaterDrops";
+        private const string LastCheckInDateKey = "Habimon.Attendance.LastCheckInDate";
+        private const string TotalWaterUsedKey = "Habimon.Achievements.TotalWaterUsed";
+
         [UnityTest]
         public IEnumerator ChildWateringAnimationRunsItsParticleEventsAndReturnsToIdle()
         {
-            AsyncOperation load = SceneManager.LoadSceneAsync("Child", LoadSceneMode.Single);
-            while (!load.isDone) yield return null;
-            yield return null;
-            MonoBehaviour watering = Resources.FindObjectsOfTypeAll<MonoBehaviour>().First(component =>
-                component != null && component.gameObject.scene.name == "Child" && component.GetType().Name == "Watering");
-            Animator animator = GetField(watering, "animator") as Animator;
-            ParticleSystem particle = GetField(watering, "waterParticle") as ParticleSystem;
-            Assert.That(animator, Is.Not.Null);
-            Assert.That(particle, Is.Not.Null);
-            watering.GetType().GetMethod("StartWatering").Invoke(watering, null);
-            Assert.That(animator.GetBool("isWatering"), Is.True);
-            yield return new WaitForSeconds(3f);
-            Assert.That(particle.isPlaying, Is.True, "The animation must invoke StartParticle.");
-            yield return new WaitForSeconds(5f);
-            Assert.That(animator.GetBool("isWatering"), Is.False, "The animation must invoke StopWatering.");
-            Assert.That(particle.isPlaying, Is.False, "The animation must invoke StopParticle.");
+            string[] itemIds =
+            {
+                "c8ba19fb117924741b0b44f7c3c3f020",
+                "b7c9dd92e76651f459a10d117e03748f",
+                "9ccbdc7702b28884688df17190667e9b"
+            };
+            var keys = new List<string>
+            {
+                WaterDropsKey,
+                LastCheckInDateKey,
+                TotalWaterUsedKey,
+                "Habimon.Achievements.Completed.6143ae3dac144003a5f10a0ecf64652d",
+                "Habimon.Achievements.Completed.74a9ea84cf2f4c5688ea6a7fa4bf82eb",
+                "Habimon.Achievements.Completed.91a8775e692e41fc9c8ffe62f5d8150d"
+            };
+            keys.AddRange(itemIds.Select(id => "Habimon.Inventory.Unlocked." + id));
+            var previous = keys.ToDictionary(key => key,
+                key => (PlayerPrefs.HasKey(key), PlayerPrefs.GetString(key, string.Empty), PlayerPrefs.GetInt(key, 0)));
+            PlayerPrefs.SetInt(WaterDropsKey, 0);
+            PlayerPrefs.SetString(LastCheckInDateKey, DateTime.Today.ToString("yyyy-MM-dd"));
+            PlayerPrefs.SetInt(TotalWaterUsedKey, 0);
+            foreach (string key in keys.Where(key => key.StartsWith("Habimon.Achievements.Completed.", StringComparison.Ordinal)
+                                                       || key.StartsWith("Habimon.Inventory.Unlocked.", StringComparison.Ordinal)))
+                PlayerPrefs.SetInt(key, 1);
+            PlayerPrefs.Save();
+
+            try
+            {
+                AsyncOperation load = SceneManager.LoadSceneAsync("Child", LoadSceneMode.Single);
+                while (!load.isDone) yield return null;
+                yield return null;
+                MonoBehaviour watering = Resources.FindObjectsOfTypeAll<MonoBehaviour>().First(component =>
+                    component != null && component.gameObject.scene.name == "Child" && component.GetType().Name == "Watering");
+                Animator animator = GetField(watering, "animator") as Animator;
+                ParticleSystem particle = GetField(watering, "waterParticle") as ParticleSystem;
+                Assert.That(animator, Is.Not.Null);
+                Assert.That(particle, Is.Not.Null);
+
+                watering.GetType().GetMethod("StartWatering").Invoke(watering, null);
+                Assert.That(animator.GetBool("isWatering"), Is.False, "Zero drops must not start watering.");
+                Assert.That(PlayerPrefs.GetInt(WaterDropsKey), Is.Zero);
+                PlayerPrefs.SetInt(WaterDropsKey, 1);
+                watering.GetType().GetMethod("StartWatering").Invoke(watering, null);
+                Assert.That(animator.GetBool("isWatering"), Is.False, "One drop must not start watering.");
+                Assert.That(PlayerPrefs.GetInt(WaterDropsKey), Is.EqualTo(1));
+                PlayerPrefs.SetInt(WaterDropsKey, 2);
+                watering.GetType().GetMethod("StartWatering").Invoke(watering, null);
+                Assert.That(animator.GetBool("isWatering"), Is.True, "Exactly two drops must start watering.");
+                Assert.That(PlayerPrefs.GetInt(WaterDropsKey), Is.Zero);
+                Assert.That(PlayerPrefs.GetInt(TotalWaterUsedKey), Is.EqualTo(2));
+                watering.GetType().GetMethod("StartWatering").Invoke(watering, null);
+                Assert.That(PlayerPrefs.GetInt(WaterDropsKey), Is.Zero, "A repeated click must not charge twice.");
+                yield return new WaitForSeconds(3f);
+                Assert.That(particle.isPlaying, Is.True, "The animation must invoke StartParticle.");
+                yield return new WaitForSeconds(5f);
+                Assert.That(animator.GetBool("isWatering"), Is.False, "The animation must invoke StopWatering.");
+                Assert.That(particle.isPlaying, Is.False, "The animation must invoke StopParticle.");
+            }
+            finally
+            {
+                foreach (var entry in previous)
+                {
+                    if (!entry.Value.Item1)
+                        PlayerPrefs.DeleteKey(entry.Key);
+                    else if (entry.Key == LastCheckInDateKey)
+                        PlayerPrefs.SetString(entry.Key, entry.Value.Item2);
+                    else
+                        PlayerPrefs.SetInt(entry.Key, entry.Value.Item3);
+                }
+                PlayerPrefs.Save();
+            }
         }
 
         [UnityTest]
@@ -235,51 +294,47 @@ namespace HABIMON.Scene.PlayMode.Tests
             yield return LoadParentScene();
             MonoBehaviour chart = FindSceneComponent("HabitLogUI");
             RectTransform chartRoot = GetField(chart, "chartRoot") as RectTransform;
-            Type pointType = chart.GetType().GetNestedType("ProgressPoint", BindingFlags.NonPublic);
-            Type listType = typeof(List<>).MakeGenericType(pointType);
-            var points = (IList)Activator.CreateInstance(listType);
-            points.Add(CreatePoint(pointType, "zero", 1, 0));
-            points.Add(CreatePoint(pointType, "none", 0, 0));
-            points.Add(CreatePoint(pointType, "full", 1, 1));
-            MethodInfo render = FindMethod(chart.GetType(), "RenderChart", 1);
+            WeeklyChartFixture fixture = CreateWeeklyChartFixture(chart, 5);
+            MethodInfo render = FindMethod(chart.GetType(), "RenderChart", 2);
 
-            render.Invoke(chart, new object[] { points });
+            render.Invoke(chart, new object[] { fixture.days, fixture.children });
             yield return null;
 
-            int generatedCount = 0;
-            bool zeroHeightBarFound = false;
+            Assert.That(chartRoot.childCount, Is.EqualTo(1));
+            RectTransform generatedChart = chartRoot.Find("WeeklyChart") as RectTransform;
+            Assert.That(generatedChart, Is.Not.Null);
+            RectTransform zeroFill = generatedChart.Find($"Day_0/Child_{fixture.childIds[0]}/Completed") as RectTransform;
+            Assert.That(zeroFill, Is.Not.Null);
+            Assert.That(zeroFill.sizeDelta.y, Is.Zero);
+            RectTransform dayZero = generatedChart.Find("Day_0") as RectTransform;
+            string[] countLabels = dayZero.GetComponentsInChildren<RectTransform>(true)
+                .Where(transform => transform.name == "Count")
+                .Select(transform => GetText(transform.gameObject)).ToArray();
+            Assert.That(countLabels, Does.Contain("—"));
+            Assert.That(countLabels, Does.Contain("?"));
+            Assert.That(countLabels, Does.Contain("0/1 !"));
+
             Type textType = Type.GetType("TMPro.TextMeshProUGUI, Unity.TextMeshPro");
-            foreach (RectTransform child in chartRoot.GetComponentsInChildren<RectTransform>(true))
+            foreach (RectTransform child in generatedChart.GetComponentsInChildren<RectTransform>(true))
             {
-                if (child == chartRoot)
-                    continue;
-                if (child.name.StartsWith("Bar_", StringComparison.Ordinal))
+                if (child.name == "Count" || child.name == "Date" || child.name == "Percentage" || child.name == "ChildrenLegend")
                 {
-                    generatedCount++;
-                    Assert.That(child.parent, Is.EqualTo(chartRoot));
-                    if (child.name == "Bar_0")
-                    {
-                        Assert.That(child.sizeDelta.y, Is.Zero);
-                        zeroHeightBarFound = true;
-                    }
-                }
-                else if (child.name.StartsWith("Label_", StringComparison.Ordinal) ||
-                         child.name.StartsWith("Value_", StringComparison.Ordinal))
-                {
-                    generatedCount++;
-                    Assert.That(child.parent, Is.EqualTo(chartRoot));
+                    Assert.That(child.IsChildOf(chartRoot), Is.True);
                     Assert.That(child.GetComponent(textType), Is.Not.Null);
                 }
             }
 
-            Assert.That(generatedCount, Is.EqualTo(9));
-            Assert.That(zeroHeightBarFound, Is.True);
-            Assert.That(GetText(chartRoot.Find("Value_1").gameObject), Is.EqualTo("—"));
-
             int childCount = chartRoot.childCount;
-            render.Invoke(chart, new object[] { points });
+            int generatedCount = generatedChart.GetComponentsInChildren<RectTransform>(true).Length;
+            render.Invoke(chart, new object[] { fixture.days, fixture.children });
             yield return null;
             Assert.That(chartRoot.childCount, Is.EqualTo(childCount));
+            Assert.That(generatedChart.GetComponentsInChildren<RectTransform>(true).Length, Is.EqualTo(generatedCount));
+
+            WeeklyChartFixture widerFixture = CreateWeeklyChartFixture(chart, 8);
+            render.Invoke(chart, new object[] { widerFixture.days, widerFixture.children });
+            yield return null;
+            Assert.That(chartRoot.rect.width, Is.GreaterThanOrEqualTo(62f + 7f * (8f * 34f + 16f)));
         }
 
         [UnityTest]
@@ -352,13 +407,76 @@ namespace HABIMON.Scene.PlayMode.Tests
             return null;
         }
 
-        private static object CreatePoint(Type pointType, string label, int total, int completed)
+        private sealed class WeeklyChartFixture
         {
-            object point = Activator.CreateInstance(pointType, true);
-            pointType.GetField("Label").SetValue(point, label);
-            pointType.GetField("Total").SetValue(point, total);
-            pointType.GetField("Completed").SetValue(point, completed);
-            return point;
+            public Array days;
+            public IList children;
+            public string[] childIds;
+        }
+
+        private static WeeklyChartFixture CreateWeeklyChartFixture(MonoBehaviour chart, int childCount)
+        {
+            Type stateType = chart.GetType().GetNestedType("ChildProgress", BindingFlags.NonPublic);
+            Type pointType = chart.GetType().GetNestedType("ProgressPoint", BindingFlags.NonPublic);
+            Type stateListType = typeof(List<>).MakeGenericType(stateType);
+            Type pointListType = typeof(List<>).MakeGenericType(pointType);
+            IList children = (IList)Activator.CreateInstance(stateListType);
+            string[] childIds = new string[childCount];
+            object[] states = new object[childCount];
+            for (int index = 0; index < childCount; index++)
+            {
+                string id = index switch
+                {
+                    0 => "zero",
+                    1 => "none",
+                    2 => "full",
+                    3 => "unknown",
+                    4 => "conflict",
+                    _ => "child-" + index
+                };
+                childIds[index] = id;
+                object state = Activator.CreateInstance(stateType, true);
+                SetField(state, "child", CreateChildModel(id));
+                SetField(state, "hasHabits", true);
+                SetField(state, "hasLogs", true);
+                children.Add(state);
+                states[index] = state;
+            }
+
+            Array days = Array.CreateInstance(pointListType, 7);
+            for (int day = 0; day < 7; day++)
+            {
+                IList points = (IList)Activator.CreateInstance(pointListType);
+                for (int index = 0; index < childCount; index++)
+                {
+                    object point = Activator.CreateInstance(pointType, true);
+                    SetField(point, "owner", states[index]);
+                    SetField(point, "total", index == 1 || index == 3 ? 0 : 1);
+                    SetField(point, "completed", index == 2 ? 1 : 0);
+                    SetField(point, "hasUnknownCoverage", index == 3);
+                    SetField(point, "hasConflictingRecords", index == 4);
+                    points.Add(point);
+                }
+                days.SetValue(points, day);
+            }
+            return new WeeklyChartFixture { days = days, children = children, childIds = childIds };
+        }
+
+        private static void SetField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, target.GetType().Name + "." + fieldName);
+            field.SetValue(target, value);
+        }
+
+        private static object CreateChildModel(string id)
+        {
+            Type type = GetAssemblyType("ChildModel");
+            object child = Activator.CreateInstance(type);
+            type.GetProperty("childId").SetValue(child, id);
+            type.GetProperty("name").SetValue(child, id);
+            return child;
         }
 
         private static string GetText(GameObject gameObject)

@@ -1,10 +1,25 @@
 fileFormatVersion: 2
-guid: b9bd2153ba3f8d145b7fe36e7d3c2774
+guid: b794b30c467840e4bad20288ae91ab26
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 3202700660080786033
-    second: "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_0"
+      213: 7122867478828336978
+    second: "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_0"
+  - first:
+      213: 5933880375748407129
+    second: "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_1"
+  - first:
+      213: 3349118456864429283
+    second: "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_2"
+  - first:
+      213: -2938464014458387386
+    second: "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_3"
+  - first:
+      213: -4279005257701756642
+    second: "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_4"
+  - first:
+      213: -1681561555703099695
+    second: "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_5"
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -37,7 +52,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -139,13 +154,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_0"
+      name: "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_0"
       rect:
         serializedVersion: 2
-        x: 36
-        y: 522
-        width: 261
-        height: 222
+        x: 101
+        y: 66
+        width: 1103
+        height: 1077
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -154,96 +169,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 17a360e1847427c20800000000000000
-      internalID: 3202700660080786033
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_1"
-      rect:
-        serializedVersion: 2
-        x: 630
-        y: 524
-        width: 232
-        height: 236
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: f2821fca67554a64c8285c48550a80bf
-      internalID: 1010873644
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_2"
-      rect:
-        serializedVersion: 2
-        x: 351
-        y: 529
-        width: 206
-        height: 207
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: d99a5fd78f4aa53429842bbe1daaf88a
-      internalID: -1782056894
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_3"
-      rect:
-        serializedVersion: 2
-        x: 916
-        y: 517
-        width: 244
-        height: 243
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 42c43a501f4fa7141acf88458eed16fb
-      internalID: -207040728
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_4"
-      rect:
-        serializedVersion: 2
-        x: 503
-        y: 187
-        width: 233
-        height: 236
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: a50b167310da8e94c95bd2f58f99ea27
-      internalID: 585175063
+      spriteID: 257ceb1cb3289d260800000000000000
+      internalID: 7122867478828336978
       vertices: []
       indices: 
       edges: []
@@ -252,7 +179,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 4e83d814f124b9043a8ad26dbae0c85d
+    spriteID: 06453ab28b9d4454aae8260e31cde13a
     internalID: 0
     vertices: []
     indices: 
@@ -262,11 +189,12 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_0": 3202700660080786033
-      "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_1": 1010873644
-      "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_2": -1782056894
-      "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_3": -207040728
-      "\u1EA2nh ch\u1EE5p m\xE0n h\xECnh 2026-10-05 104229_4": 585175063
+      "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_0": 7122867478828336978
+      "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_1": 5933880375748407129
+      "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_2": 3349118456864429283
+      "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_3": -2938464014458387386
+      "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_4": -4279005257701756642
+      "Bi\u1EC3u t\u01B0\u1EE3ng l\u1ECBch xanh t\xEDch ch\u1ECDn_5": -1681561555703099695
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

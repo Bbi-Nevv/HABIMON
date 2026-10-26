@@ -159,53 +159,160 @@ namespace HABIMON.Core.Tests
                 RectTransform chartRoot = serialized.FindProperty("chartRoot").objectReferenceValue as RectTransform;
                 Assert.That(chartRoot, Is.Not.Null);
 
-                Type pointType = chart.GetType().GetNestedType("ProgressPoint", BindingFlags.NonPublic);
-                Type pointsType = typeof(List<>).MakeGenericType(pointType);
-                IList points = (IList)Activator.CreateInstance(pointsType);
-                points.Add(CreatePoint(pointType, "zero", 1, 0));
-                points.Add(CreatePoint(pointType, "none", 0, 0));
-                points.Add(CreatePoint(pointType, "full", 1, 1));
+                WeeklyChartFixture fixture = CreateWeeklyChartFixture(chart, 5);
                 MethodInfo render = chart.GetType().GetMethod("RenderChart", BindingFlags.Instance | BindingFlags.NonPublic);
                 Type textMeshProType = Type.GetType("TMPro.TextMeshProUGUI, Unity.TextMeshPro");
                 Assert.That(textMeshProType, Is.Not.Null);
+                Assert.That(render.GetParameters().Length, Is.EqualTo(2));
 
-                render.Invoke(chart, new object[] { points });
+                render.Invoke(chart, new object[] { fixture.days, fixture.children });
                 int firstDrawChildCount = chartRoot.childCount;
-                Assert.That(firstDrawChildCount, Is.GreaterThan(3));
+                Assert.That(firstDrawChildCount, Is.EqualTo(1));
+                Transform generatedChart = chartRoot.Find("WeeklyChart");
+                Assert.That(generatedChart, Is.Not.Null);
 
-                bool foundZeroHeightBar = false;
-                foreach (RectTransform child in chartRoot.GetComponentsInChildren<RectTransform>(true))
+                RectTransform zeroFill = generatedChart.Find($"Day_0/Child_{fixture.childIds[0]}/Completed") as RectTransform;
+                Assert.That(zeroFill, Is.Not.Null);
+                Assert.That(zeroFill.sizeDelta.y, Is.Zero);
+                RectTransform dayZero = generatedChart.Find("Day_0") as RectTransform;
+                string[] countLabels = dayZero.GetComponentsInChildren<RectTransform>(true)
+                    .Where(transform => transform.name == "Count")
+                    .Select(transform => GetText(transform.gameObject)).ToArray();
+                Assert.That(countLabels, Does.Contain("—"));
+                Assert.That(countLabels, Does.Contain("?"));
+                Assert.That(countLabels, Does.Contain("0/1 !"));
+
+                foreach (RectTransform child in generatedChart.GetComponentsInChildren<RectTransform>(true))
                 {
-                    if (child == chartRoot)
-                        continue;
-                    Image image = child.GetComponent<Image>();
-                    if (image != null && child.name.StartsWith("Bar_", StringComparison.Ordinal))
-                    {
-                        Assert.That(child.parent, Is.EqualTo(chartRoot));
-                        if (child.name == "Bar_0")
-                        {
-                            Assert.That(child.sizeDelta.y, Is.Zero);
-                            foundZeroHeightBar = true;
-                        }
-                    }
-
-                    if (child.name.StartsWith("Label_", StringComparison.Ordinal) ||
-                        child.name.StartsWith("Value_", StringComparison.Ordinal))
+                    if (child.name == "Count" || child.name == "Date" || child.name == "Percentage" || child.name == "ChildrenLegend")
                         Assert.That(child.GetComponent(textMeshProType), Is.Not.Null, child.name + " uses concrete TMP UI text");
                 }
-                Assert.That(foundZeroHeightBar, Is.True);
 
-                render.Invoke(chart, new object[] { points });
+                int firstGeneratedCount = generatedChart.GetComponentsInChildren<RectTransform>(true).Length;
+                render.Invoke(chart, new object[] { fixture.days, fixture.children });
                 Assert.That(chartRoot.childCount, Is.EqualTo(firstDrawChildCount));
+                Assert.That(generatedChart.GetComponentsInChildren<RectTransform>(true).Length, Is.EqualTo(firstGeneratedCount));
 
-                for (int index = 0; index < 31; index++)
-                    points.Add(CreatePoint(pointType, index.ToString(), 1, 0));
-                render.Invoke(chart, new object[] { points });
-                Assert.That(chartRoot.rect.width, Is.GreaterThanOrEqualTo(31f * 40f));
+                WeeklyChartFixture widerFixture = CreateWeeklyChartFixture(chart, 8);
+                render.Invoke(chart, new object[] { widerFixture.days, widerFixture.children });
+                Assert.That(chartRoot.rect.width, Is.GreaterThanOrEqualTo(62f + 7f * (8f * 34f + 16f)));
             }
             finally
             {
                 EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        [Test]
+        public void HabitLogPanelStartsClosedAndPinPopupsAreCanvasRootOverlays()
+        {
+            Scene scene = EditorSceneManager.OpenScene("Assets/_Scenes/Parent.unity", OpenSceneMode.Additive);
+            try
+            {
+                GameObject panel = scene.GetRootGameObjects()
+                    .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
+                    .First(transform => transform.name == "HabitLogPanel").gameObject;
+                Assert.That(panel.activeSelf, Is.False);
+
+                MonoBehaviour pin = FindComponent(scene, "Pin");
+                Assert.That(pin, Is.Not.Null);
+                var pinFields = new SerializedObject(pin);
+                GameObject canvas = scene.GetRootGameObjects().First(root => root.name == "Canvas");
+                foreach (string fieldName in new[] { "changePinPopup", "verifyPopup" })
+                {
+                    GameObject popup = pinFields.FindProperty(fieldName).objectReferenceValue as GameObject;
+                    Assert.That(popup, Is.Not.Null, fieldName);
+                    Assert.That(popup.activeSelf, Is.False, fieldName);
+                    Assert.That(popup.transform.parent, Is.EqualTo(canvas.transform), fieldName + " is above inactive tabs");
+                    RectTransform rect = popup.transform as RectTransform;
+                    Assert.That(rect.anchorMin, Is.EqualTo(Vector2.zero));
+                    Assert.That(rect.anchorMax, Is.EqualTo(Vector2.one));
+                }
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        [Test]
+        public void ChildAchievementWaterSpriteResolvesTheSingleImportedSprite()
+        {
+            Scene scene = EditorSceneManager.OpenScene("Assets/_Scenes/Child.unity", OpenSceneMode.Additive);
+            try
+            {
+                MonoBehaviour view = FindComponent(scene, "AchievementProgressView");
+                Assert.That(view, Is.Not.Null);
+                Sprite sprite = new SerializedObject(view).FindProperty("waterSprite").objectReferenceValue as Sprite;
+                Assert.That(sprite, Is.Not.Null);
+                Assert.That(AssetDatabase.TryGetGUIDAndLocalFileIdentifier(sprite, out string guid, out long localId), Is.True);
+                Assert.That(guid, Is.EqualTo("b45c3c4a0908bcd47a81e4f5443615bd"));
+                Assert.That(localId, Is.EqualTo(21300000));
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        [Test]
+        public void LegacyEquippedRewardItemIsMigratedWithoutUnlockingOtherRewards()
+        {
+            string[] legacyIds =
+            {
+                "c8ba19fb117924741b0b44f7c3c3f020",
+                "b7c9dd92e76651f459a10d117e03748f",
+                "9ccbdc7702b28884688df17190667e9b"
+            };
+            var keys = new List<string> { "Habimon.Equipment.0" };
+            keys.AddRange(legacyIds.Select(id => "Habimon.Inventory.Unlocked." + id));
+            var previous = keys.ToDictionary(key => key,
+                key => (PlayerPrefs.HasKey(key), PlayerPrefs.GetString(key, string.Empty), PlayerPrefs.GetInt(key, 0)));
+            Scene scene = default;
+
+            try
+            {
+                PlayerPrefs.SetString("Habimon.Equipment.0", legacyIds[0]);
+                foreach (string id in legacyIds)
+                    PlayerPrefs.SetInt("Habimon.Inventory.Unlocked." + id, 0);
+                PlayerPrefs.Save();
+
+                scene = EditorSceneManager.OpenScene("Assets/_Scenes/Child.unity", OpenSceneMode.Additive);
+                MonoBehaviour equipment = FindComponent(scene, "SaveEquipment");
+                Assert.That(equipment, Is.Not.Null);
+                IList legacyItems = (IList)GetPrivateField(equipment, "legacyStartingItems");
+                Assert.That(legacyItems.Cast<object>().Select(GetItemId), Is.EqualTo(legacyIds));
+
+                MethodInfo migrate = equipment.GetType().GetMethod("MigrateLegacyEquippedItems", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(migrate, Is.Not.Null);
+                migrate.Invoke(equipment, null);
+
+                string migratedKey = "Habimon.Inventory.Unlocked." + legacyIds[0];
+                Assert.That(PlayerPrefs.GetInt(migratedKey, 0), Is.EqualTo(1));
+                object inventory = GetPrivateField(equipment, "inventory");
+                Assert.That(inventory, Is.Not.Null);
+                IList ownedItems = (IList)inventory.GetType().GetProperty("Items").GetValue(inventory);
+                Assert.That(ownedItems.Contains(legacyItems[0]), Is.True);
+                for (int index = 1; index < legacyIds.Length; index++)
+                {
+                    Assert.That(PlayerPrefs.GetInt("Habimon.Inventory.Unlocked." + legacyIds[index], 0), Is.Zero);
+                    Assert.That(ownedItems.Contains(legacyItems[index]), Is.False);
+                }
+            }
+            finally
+            {
+                foreach (var entry in previous)
+                {
+                    if (!entry.Value.Item1)
+                        PlayerPrefs.DeleteKey(entry.Key);
+                    else if (entry.Key.StartsWith("Habimon.Equipment.", StringComparison.Ordinal))
+                        PlayerPrefs.SetString(entry.Key, entry.Value.Item2);
+                    else
+                        PlayerPrefs.SetInt(entry.Key, entry.Value.Item3);
+                }
+                PlayerPrefs.Save();
+                if (scene.IsValid())
+                    EditorSceneManager.CloseScene(scene, true);
             }
         }
 
@@ -622,13 +729,96 @@ namespace HABIMON.Core.Tests
             public int client_type;
         }
 
-        private static object CreatePoint(Type pointType, string label, int total, int completed)
+        private sealed class WeeklyChartFixture
         {
-            object point = Activator.CreateInstance(pointType, true);
-            pointType.GetField("Label").SetValue(point, label);
-            pointType.GetField("Total").SetValue(point, total);
-            pointType.GetField("Completed").SetValue(point, completed);
-            return point;
+            public Array days;
+            public IList children;
+            public string[] childIds;
+        }
+
+        private static WeeklyChartFixture CreateWeeklyChartFixture(MonoBehaviour chart, int childCount)
+        {
+            Type stateType = chart.GetType().GetNestedType("ChildProgress", BindingFlags.NonPublic);
+            Type pointType = chart.GetType().GetNestedType("ProgressPoint", BindingFlags.NonPublic);
+            Type stateListType = typeof(List<>).MakeGenericType(stateType);
+            Type pointListType = typeof(List<>).MakeGenericType(pointType);
+            IList children = (IList)Activator.CreateInstance(stateListType);
+            string[] childIds = new string[childCount];
+            object[] states = new object[childCount];
+            for (int index = 0; index < childCount; index++)
+            {
+                string id = index switch
+                {
+                    0 => "zero",
+                    1 => "none",
+                    2 => "full",
+                    3 => "unknown",
+                    4 => "conflict",
+                    _ => "child-" + index
+                };
+                childIds[index] = id;
+                object state = Activator.CreateInstance(stateType, true);
+                SetPrivateField(state, "child", CreateNamedChildModel(id, id));
+                SetPrivateField(state, "hasHabits", true);
+                SetPrivateField(state, "hasLogs", true);
+                children.Add(state);
+                states[index] = state;
+            }
+
+            Array days = Array.CreateInstance(pointListType, 7);
+            for (int day = 0; day < 7; day++)
+            {
+                IList points = (IList)Activator.CreateInstance(pointListType);
+                for (int index = 0; index < childCount; index++)
+                {
+                    object point = Activator.CreateInstance(pointType, true);
+                    SetPrivateField(point, "owner", states[index]);
+                    SetPrivateField(point, "total", index == 1 || index == 3 ? 0 : 1);
+                    SetPrivateField(point, "completed", index == 2 ? 1 : 0);
+                    SetPrivateField(point, "hasUnknownCoverage", index == 3);
+                    SetPrivateField(point, "hasConflictingRecords", index == 4);
+                    points.Add(point);
+                }
+                days.SetValue(points, day);
+            }
+            return new WeeklyChartFixture { days = days, children = children, childIds = childIds };
+        }
+
+        private static object GetPrivateField(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, target.GetType().Name + "." + fieldName);
+            return field.GetValue(target);
+        }
+
+        private static void SetPrivateField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, target.GetType().Name + "." + fieldName);
+            field.SetValue(target, value);
+        }
+
+        private static object CreateNamedChildModel(string id, string name)
+        {
+            Type type = AppDomain.CurrentDomain.GetAssemblies()
+                .Select(assembly => assembly.GetType("ChildModel"))
+                .First(found => found != null);
+            object child = Activator.CreateInstance(type);
+            type.GetProperty("childId").SetValue(child, id);
+            type.GetProperty("name").SetValue(child, name);
+            return child;
+        }
+
+        private static string GetItemId(object item)
+        {
+            return (string)item.GetType().GetProperty("ItemId").GetValue(item);
+        }
+
+        private static string GetText(GameObject gameObject)
+        {
+            TMP_Text text = gameObject.GetComponent<TMP_Text>();
+            Assert.That(text, Is.Not.Null, gameObject.name + " has TMP UI text");
+            return text.text;
         }
 
         private static void AssertSceneIconReferences(string scenePath, string componentTypeName, string propertyName, int index)

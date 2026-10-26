@@ -8,10 +8,18 @@ namespace HABIMON.Chatbot
         public string capturedAt;
         public string localDate;
         public string timeZone;
+        public ChatbotHistoryRangeContext historyRange;
         public ChatChildContext child;
         public ChatPetContext pet;
         public ChatHabitContext[] habits;
         public ChatRewardContext[] rewards;
+    }
+
+    [Serializable]
+    public class ChatbotHistoryRangeContext
+    {
+        public string startDateInclusive;
+        public string endDateExclusive;
     }
 
     [Serializable]

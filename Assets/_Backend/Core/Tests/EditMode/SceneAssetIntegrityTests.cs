@@ -10,6 +10,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using TMPro;
 
 namespace HABIMON.Core.Tests
 {
@@ -301,7 +302,7 @@ namespace HABIMON.Core.Tests
         }
 
         [Test]
-        public void ChildPinEntryButtonRunsPinPopupResetBeforeShowing()
+        public void ChildPinEntryButtonKeepsFailedAttemptLockWhenPopupReopens()
         {
             Scene previousScene = SceneManager.GetActiveScene();
             Scene childScene = EditorSceneManager.OpenScene("Assets/_Scenes/Child.unity", OpenSceneMode.Additive);
@@ -358,10 +359,12 @@ namespace HABIMON.Core.Tests
 
                 verifyingField.SetValue(pin, false);
                 attemptsField.SetValue(pin, 3);
+                verifyButton.interactable = false;
                 pin.GetType().GetMethod("OpenVerifyPopup").Invoke(pin, null);
 
-                Assert.That((int)attemptsField.GetValue(pin), Is.Zero);
-                Assert.That(verifyButton.interactable, Is.True);
+                Assert.That((int)attemptsField.GetValue(pin), Is.EqualTo(3),
+                    "Closing and reopening the popup must not reset the failed-attempt lock.");
+                Assert.That(verifyButton.interactable, Is.False);
                 Assert.That(verifyPopup.activeSelf, Is.True);
             }
             finally
@@ -369,6 +372,95 @@ namespace HABIMON.Core.Tests
                 if (previousScene.IsValid())
                     SceneManager.SetActiveScene(previousScene);
                 EditorSceneManager.CloseScene(childScene, true);
+            }
+        }
+
+        [Test]
+        public void ParentSceneHasAFirstPinSetupGateThatCannotBeDismissedBeforeSaving()
+        {
+            Scene previousScene = SceneManager.GetActiveScene();
+            Scene parentScene = EditorSceneManager.OpenScene("Assets/_Scenes/Parent.unity", OpenSceneMode.Additive);
+            try
+            {
+                MonoBehaviour pin = FindComponent(parentScene, "Pin");
+                Assert.That(pin, Is.Not.Null);
+
+                FieldInfo popupField = pin.GetType().GetField("changePinPopup", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo backButtonField = pin.GetType().GetField("changePinPopupBackButton", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo currentPinField = pin.GetType().GetField("currentPinInput", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo newPinField = pin.GetType().GetField("newPinInput", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo confirmPinField = pin.GetType().GetField("confirmPinInput", BindingFlags.Instance | BindingFlags.NonPublic);
+                GameObject popup = (GameObject)popupField.GetValue(pin);
+                Button backButton = (Button)backButtonField.GetValue(pin);
+                TMP_InputField currentPin = (TMP_InputField)currentPinField.GetValue(pin);
+                TMP_InputField newPin = (TMP_InputField)newPinField.GetValue(pin);
+                TMP_InputField confirmPin = (TMP_InputField)confirmPinField.GetValue(pin);
+                Assert.That(popup, Is.Not.Null);
+                Assert.That(backButton, Is.Not.Null);
+                Assert.That(popup.activeSelf, Is.False);
+
+                pin.GetType().GetMethod("OpenInitialPinSetupGate", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(pin, null);
+
+                Assert.That(popup.activeSelf, Is.True);
+                Assert.That(backButton.interactable, Is.False,
+                    "The first-time setup gate must stay open until the new PIN is saved.");
+                Assert.That(currentPin.gameObject.activeSelf, Is.False,
+                    "First-time PIN setup must not display a current PIN field.");
+                Assert.That(newPin.gameObject.activeSelf, Is.True);
+                Assert.That(confirmPin.gameObject.activeSelf, Is.True);
+                Assert.That(newPin.GetComponent<RectTransform>().anchoredPosition.y, Is.EqualTo(518f));
+                Assert.That(confirmPin.GetComponent<RectTransform>().anchoredPosition.y, Is.EqualTo(351f));
+                TMP_Text status = (TMP_Text)pin.GetType().GetField("changeStatusText", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pin);
+                Assert.That(status.text, Does.Contain("để trống ô PIN hiện tại"));
+                Assert.That(status.fontSize, Is.EqualTo(30f));
+                Assert.That(status.textWrappingMode, Is.EqualTo(TextWrappingModes.Normal));
+                Assert.That(status.rectTransform.sizeDelta.x, Is.GreaterThanOrEqualTo(800f));
+            }
+            finally
+            {
+                if (previousScene.IsValid())
+                    SceneManager.SetActiveScene(previousScene);
+                EditorSceneManager.CloseScene(parentScene, true);
+            }
+        }
+
+        [Test]
+        public void ChatbotTextAndComposerUseStaticVietnameseFontAsset()
+        {
+            TMP_FontAsset font = Resources.Load<TMP_FontAsset>("HABIMONChatbotVietnameseFont");
+            Assert.That(font, Is.Not.Null, "The dedicated chatbot font must be included in Resources.");
+            Assert.That(font.atlasPopulationMode, Is.EqualTo(AtlasPopulationMode.Static));
+            Assert.That(font.fallbackFontAssetTable == null || font.fallbackFontAssetTable.Count == 0,
+                "Chatbot text must not depend on a dynamic fallback font atlas.");
+            Assert.That(font.HasCharacters("Dữ liệu HABIMON: ă â ê ô ơ ư đ ạ ế ệ ỡ ữ • – ‘ ’ →"), Is.True);
+
+            System.Reflection.Assembly appAssembly = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(assembly => assembly.GetName().Name == "Assembly-CSharp");
+            Assert.That(appAssembly, Is.Not.Null);
+            System.Type factory = appAssembly.GetType("ChatbotUiFactory");
+            Assert.That(factory, Is.Not.Null);
+            var textMethod = factory.GetMethod("Text", BindingFlags.Static | BindingFlags.NonPublic);
+            var inputMethod = factory.GetMethod("Input", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(textMethod, Is.Not.Null);
+            Assert.That(inputMethod, Is.Not.Null);
+
+            var parent = new GameObject("ChatbotFontTest", typeof(RectTransform));
+            try
+            {
+                TMP_Text text = (TMP_Text)textMethod.Invoke(null, new object[]
+                {
+                    "FontTest", parent.transform, "Dữ liệu", 18f, Color.white, TextAlignmentOptions.MidlineLeft
+                });
+                TMP_InputField input = (TMP_InputField)inputMethod.Invoke(null, new object[] { parent.transform });
+
+                Assert.That(text.font, Is.SameAs(font));
+                Assert.That(input.textComponent.font, Is.SameAs(font));
+                Assert.That(((TMP_Text)input.placeholder).font, Is.SameAs(font));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(parent);
             }
         }
 

@@ -17,6 +17,9 @@ namespace HABIMON.Chatbot
             AppendStringProperty(json, "capturedAt", context.capturedAt);
             AppendStringProperty(json, "localDate", context.localDate);
             AppendStringProperty(json, "timeZone", context.timeZone);
+            AppendPropertyName(json, "historyRange");
+            AppendHistoryRange(json, context.historyRange);
+            json.Append(',');
             AppendPropertyName(json, "child");
             AppendChild(json, context.child);
             json.Append(',');
@@ -58,6 +61,21 @@ namespace HABIMON.Chatbot
             AppendStringProperty(json, "name", child.name);
             AppendNumberProperty(json, "age", child.age);
             AppendStringProperty(json, "gender", child.gender);
+            RemoveTrailingComma(json);
+            json.Append('}');
+        }
+
+        private static void AppendHistoryRange(StringBuilder json, ChatbotHistoryRangeContext range)
+        {
+            if (range == null)
+            {
+                json.Append("null");
+                return;
+            }
+
+            json.Append('{');
+            AppendStringProperty(json, "startDateInclusive", range.startDateInclusive);
+            AppendStringProperty(json, "endDateExclusive", range.endDateExclusive);
             RemoveTrailingComma(json);
             json.Append('}');
         }

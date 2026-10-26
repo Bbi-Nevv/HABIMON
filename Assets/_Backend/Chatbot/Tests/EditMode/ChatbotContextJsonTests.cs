@@ -13,6 +13,11 @@ namespace HABIMON.Chatbot.Tests
                 capturedAt = "2026-10-17T14:00:00+07:00",
                 localDate = "2026-10-17",
                 timeZone = "Asia/Ho_Chi_Minh",
+                historyRange = new ChatbotHistoryRangeContext
+                {
+                    startDateInclusive = "2026-09-18",
+                    endDateExclusive = "2026-10-18"
+                },
                 child = new ChatChildContext
                 {
                     name = "Bé \"An\" \\",
@@ -52,6 +57,7 @@ namespace HABIMON.Chatbot.Tests
             Assert.That(JsonUtility.FromJson<ChatbotContext>(json), Is.Not.Null);
             StringAssert.Contains("Bé \\\"An\\\" \\\\", json);
             StringAssert.Contains("Đọc sách", json);
+            StringAssert.Contains("\"historyRange\":{\"startDateInclusive\":\"2026-09-18\",\"endDateExclusive\":\"2026-10-18\"}", json);
             StringAssert.Contains("\"schedule\":{\"kind\":\"day_period\",\"value\":\"evening\"}", json);
             StringAssert.DoesNotContain("timeTarget", json);
             StringAssert.Contains("\"pet\":null", json);

@@ -1,0 +1,10 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.gsam.habimon.chatbot.securestore'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 25
+    }
+}

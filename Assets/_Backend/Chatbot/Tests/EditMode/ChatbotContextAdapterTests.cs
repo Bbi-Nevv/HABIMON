@@ -112,6 +112,22 @@ namespace HABIMON.Chatbot.Tests
         }
 
         [Test]
+        public void BuildNormalizesLegacySundayToIsoSevenWithoutChangingSource()
+        {
+            int[] legacyDays = { 0, 1, 6 };
+            var source = new ChatbotContextSource
+            {
+                child = new ChatbotChildSource { name = "An", age = 7 },
+                habits = new[] { new ChatbotHabitSource { repeatDays = legacyDays } }
+            };
+
+            ChatbotContext context = ChatbotContextAdapter.Build(source);
+
+            Assert.That(context.habits[0].repeatDays, Is.EqualTo(new[] { 7, 1, 6 }));
+            Assert.That(legacyDays, Is.EqualTo(new[] { 0, 1, 6 }));
+        }
+
+        [Test]
         public void BuildTreatsDefaultChildPlaceholderAsUnknown()
         {
             var source = new ChatbotContextSource

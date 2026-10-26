@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
@@ -154,22 +153,9 @@ public class Childrent : MonoBehaviour
 
         if (texts.Length > 1)
         {
-            string age;
-            if (child.age <= 0)
-            {
-                age = "Chưa cập nhật tuổi";
-            }
-            else if (child.ageAsOf.HasValue)
-            {
-                DateTimeOffset ageDate = new DateTimeOffset(child.ageAsOf.Value.ToDateTime().ToUniversalTime())
-                    .ToOffset(TimeSpan.FromHours(7));
-                string ageDateLabel = ageDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
-                age = $"{child.age} tuổi (tính đến {ageDateLabel})";
-            }
-            else
-            {
-                age = $"{child.age} tuổi (chưa rõ ngày cập nhật)";
-            }
+            // The update date remains in the child model; only its redundant qualifier is
+            // omitted from this compact parent task-list label.
+            string age = child.age > 0 ? $"{child.age} tuổi" : "Chưa cập nhật tuổi";
 
             string gender = child.gender == 0 ? "Nữ" : child.gender == 1 ? "Nam" : "Chưa cập nhật";
             texts[1].text = $"{age}, {gender}";

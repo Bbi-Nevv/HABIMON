@@ -192,7 +192,7 @@ public static class FirebaseChatbotContextAdapter
                 scheduleKind = habit.scheduleKind,
                 scheduleValue = habit.scheduleValue,
                 timeTarget = habit.timeTarget,
-                repeatDays = habit.repeatDays?.ToArray(),
+                repeatDays = NormalizeRepeatDays(habit.repeatDays),
                 rewardGold = habit.rewardGold,
                 rewardExp = habit.rewardExp,
                 requireApproval = habit.requireApproval,
@@ -216,6 +216,15 @@ public static class FirebaseChatbotContextAdapter
         };
 
         return ChatbotContextAdapter.Build(source);
+    }
+
+    private static int[] NormalizeRepeatDays(IEnumerable<int> repeatDays)
+    {
+        if (repeatDays == null)
+            return null;
+
+        // Legacy HABIMON data represented Sunday as 0; the model contract is ISO 1..7.
+        return repeatDays.Select(day => day == 0 ? 7 : day).ToArray();
     }
 
     private static string TimestampToIso8601(Timestamp? timestamp)

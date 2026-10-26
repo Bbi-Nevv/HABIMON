@@ -10,6 +10,15 @@ using System.Threading.Tasks;
 using HABIMON.Core;
 using UnityEngine;
 
+public enum ParentPinState
+{
+    Configured,
+    NotConfigured,
+    NotAuthenticated,
+    FirebaseUnavailable,
+    ParentProfileMissing
+}
+
 public class FirebaseManager : MonoBehaviour
 {
     #region Instance
@@ -424,23 +433,46 @@ public class FirebaseManager : MonoBehaviour
 
     public async Task<bool> HasParentPinAsync()
     {
-        if (!await EnsureInitializedAsync() || string.IsNullOrEmpty(GetCurrentParentId()))
-            return false;
+        return await GetParentPinStateAsync() == ParentPinState.Configured;
+    }
+
+    public async Task<ParentPinState> GetParentPinStateAsync()
+    {
+        if (!await EnsureInitializedAsync())
+            return ParentPinState.FirebaseUnavailable;
+
+        string parentId = GetCurrentParentId();
+        if (string.IsNullOrWhiteSpace(parentId))
+            return ParentPinState.NotAuthenticated;
 
         DocumentSnapshot snapshot = await db.Collection("users")
-            .Document(GetCurrentParentId())
+            .Document(parentId)
             .GetSnapshotAsync();
-        return snapshot.Exists && snapshot.ContainsField("pincode") &&
-               !string.IsNullOrWhiteSpace(snapshot.GetValue<string>("pincode"));
+        if (!snapshot.Exists)
+            return ParentPinState.ParentProfileMissing;
+
+        return snapshot.ContainsField("pincode") &&
+               !string.IsNullOrWhiteSpace(snapshot.GetValue<string>("pincode"))
+            ? ParentPinState.Configured
+            : ParentPinState.NotConfigured;
     }
 
     public async Task<bool> ChangeParentPinAsync(string currentPin, string newPin)
     {
-        if (!await EnsureInitializedAsync() || string.IsNullOrEmpty(GetCurrentParentId()))
+        if (!await EnsureInitializedAsync())
             return false;
 
-        bool hasPin = await HasParentPinAsync();
-        if (hasPin)
+        string parentId = GetCurrentParentId();
+        if (string.IsNullOrWhiteSpace(parentId))
+            return false;
+
+        ParentPinState pinState = await GetParentPinStateAsync();
+        if (pinState != ParentPinState.Configured && pinState != ParentPinState.NotConfigured)
+            return false;
+        if (parentId != GetCurrentParentId())
+            return false;
+
+        if (pinState == ParentPinState.Configured)
         {
             if (!await VerifyParentPinAsync(currentPin))
                 return false;
@@ -452,8 +484,11 @@ public class FirebaseManager : MonoBehaviour
 
         try
         {
+            if (parentId != GetCurrentParentId() || string.IsNullOrWhiteSpace(parentId))
+                return false;
+
             await db.Collection("users")
-                .Document(GetCurrentParentId())
+                .Document(parentId)
                 .UpdateAsync("pincode", HashPin(newPin));
         }
         catch (Exception ex)

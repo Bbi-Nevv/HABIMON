@@ -109,7 +109,7 @@ namespace HABIMON.Chatbot
                     title = habit.title,
                     description = habit.description,
                     schedule = BuildSchedule(habit.scheduleKind, habit.scheduleValue, habit.timeTarget),
-                    repeatDays = habit.repeatDays == null ? null : (int[])habit.repeatDays.Clone(),
+                    repeatDays = NormalizeRepeatDays(habit.repeatDays),
                     rewardGold = habit.rewardGold,
                     rewardExp = habit.rewardExp,
                     requireApproval = habit.requireApproval,
@@ -119,6 +119,18 @@ namespace HABIMON.Chatbot
             }
 
             return result.ToArray();
+        }
+
+        private static int[] NormalizeRepeatDays(int[] repeatDays)
+        {
+            if (repeatDays == null)
+                return null;
+
+            // Legacy HABIMON data used 0 for Sunday; the assistant contract uses ISO 1..7.
+            var normalized = new int[repeatDays.Length];
+            for (int index = 0; index < repeatDays.Length; index++)
+                normalized[index] = repeatDays[index] == 0 ? 7 : repeatDays[index];
+            return normalized;
         }
 
         private static ChatHabitScheduleContext BuildSchedule(string scheduleKind, string scheduleValue, string timeTarget)

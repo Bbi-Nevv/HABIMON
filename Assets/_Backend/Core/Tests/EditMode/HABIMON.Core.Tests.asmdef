@@ -2,7 +2,8 @@
   "name": "HABIMON.Core.Tests",
   "rootNamespace": "HABIMON.Core.Tests",
   "references": [
-    "HABIMON.Core"
+    "HABIMON.Core",
+    "Unity.TextMeshPro"
   ],
   "includePlatforms": [
     "Editor"

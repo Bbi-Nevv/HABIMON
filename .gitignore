@@ -105,14 +105,7 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
-# Gitnexus
-!docs/
-docs/*
-!docs/CODEBASE_AUDIT_FINDINGS_2026-10-18.md
-!docs/CODEBASE_REMEDIATION_PLAN_2026-10-18.md
-!docs/CODEBASE_REVIEW_AND_CHANGE_REPORT_2026-10-18.md
-!docs/FIRESTORE_SETUP_2026-10-18.md
-!docs/FIREBASE_REMEDIATION_ACTION_PLAN_2026-10-22.md
+docs/
 .claude/skills/
 AGENTS.md
 CLAUDE.md

@@ -8,8 +8,9 @@ public class AffiliateManager : MonoBehaviour
 
     public void OpenProduct()
     {
+        string normalizedLink = affiliateLink?.Trim();
         if (!Uri.TryCreate(
-                affiliateLink,
+                normalizedLink,
                 UriKind.Absolute,
                 out Uri uri))
         {
@@ -23,6 +24,6 @@ public class AffiliateManager : MonoBehaviour
             return;
         }
 
-        Application.OpenURL(affiliateLink);
+        Application.OpenURL(uri.AbsoluteUri);
     }
 }

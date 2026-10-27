@@ -31,6 +31,8 @@ public class ParentConfirm : MonoBehaviour
     private bool hasStarted;
     private bool hasChildrenSnapshot;
     private bool childrenListenerFailed;
+    private FirebaseManager subscribedManager;
+    private int loadedGeneration;
 
     private sealed class ChildRequests
     {
@@ -90,6 +92,7 @@ public class ParentConfirm : MonoBehaviour
     {
         ++sessionVersion;
         StopListeners();
+        UnsubscribeFromSession();
         foreach (RequestView view in views.Values)
         {
             if (view.toggle != null)
@@ -103,6 +106,7 @@ public class ParentConfirm : MonoBehaviour
     {
         ++sessionVersion;
         StopListeners();
+        UnsubscribeFromSession();
         if (closeButton != null)
             closeButton.onClick.RemoveListener(ClosePopup);
         if (openButton != null)
@@ -151,17 +155,11 @@ public class ParentConfirm : MonoBehaviour
 
         try
         {
-            while (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
-            {
-                if (!IsCurrentSession(version))
-                    return;
-                await Task.Delay(100);
-            }
-
-            if (!IsCurrentSession(version))
-                return;
-
             FirebaseManager manager = FirebaseManager.Instance;
+            if (manager == null || !await manager.EnsureInitializedAsync() || !IsCurrentSession(version))
+                return;
+            SubscribeToSession(manager);
+            loadedGeneration = manager.SessionGeneration;
             loadedParentId = manager.GetCurrentParentId();
             if (string.IsNullOrEmpty(loadedParentId))
                 throw new InvalidOperationException("Không xác định được tài khoản phụ huynh.");
@@ -222,7 +220,7 @@ public class ParentConfirm : MonoBehaviour
             {
                 if (!IsCurrentChild(state, version))
                     return;
-        
+
 
                 state.habits.Clear();
                 foreach (HabitModel habit in habits)
@@ -276,7 +274,7 @@ public class ParentConfirm : MonoBehaviour
         }
         _ = ObserveListenerAsync(listener, version, onFailure, state);
     }
-        
+
 
     private async Task ObserveListenerAsync(ListenerRegistration listener, int version, Action onFailure, ChildRequests state)
     {
@@ -297,9 +295,34 @@ public class ParentConfirm : MonoBehaviour
         }
     }
 
+    private void SubscribeToSession(FirebaseManager manager)
+    {
+        if (manager == subscribedManager) return;
+        UnsubscribeFromSession();
+        subscribedManager = manager;
+        manager.SessionChanged += ReloadForSession;
+        manager.CurrentChildChanged += ReloadForSession;
+    }
+
+    private void UnsubscribeFromSession()
+    {
+        if (subscribedManager == null) return;
+        subscribedManager.SessionChanged -= ReloadForSession;
+        subscribedManager.CurrentChildChanged -= ReloadForSession;
+        subscribedManager = null;
+    }
+
+    private void ReloadForSession()
+    {
+        if (isActiveAndEnabled) _ = StartListeningAsync();
+    }
+
     private bool IsCurrentSession(int version)
     {
-        return this != null && isActiveAndEnabled && version == sessionVersion;
+        return this != null && isActiveAndEnabled && version == sessionVersion &&
+            (string.IsNullOrEmpty(loadedParentId) || (subscribedManager != null &&
+                subscribedManager == FirebaseManager.Instance && loadedParentId == subscribedManager.GetCurrentParentId() &&
+                loadedGeneration == subscribedManager.SessionGeneration));
     }
 
     private bool IsCurrentChild(ChildRequests state, int version)
@@ -325,8 +348,11 @@ public class ParentConfirm : MonoBehaviour
         {
             foreach (HabitLogModel log in state.logs)
             {
-                if (!log.isCompleted || log.isApproved || string.IsNullOrEmpty(log.habitId) || string.IsNullOrEmpty(log.dateKey)
+                if (!log.isCompleted || log.isApproved || !log.completedAt.HasValue || string.IsNullOrEmpty(log.habitId) || string.IsNullOrEmpty(log.dateKey)
                     || !state.habits.TryGetValue(log.habitId, out HabitModel habit))
+                    continue;
+
+                if (!(log.requiresApprovalAtCompletion ?? habit.requireApproval))
                     continue;
 
                 string key = GetRequestKey(state.child.childId, log);
@@ -436,7 +462,7 @@ public class ParentConfirm : MonoBehaviour
         if (view.completedAt != null)
         {
             string childName = string.IsNullOrWhiteSpace(request.owner.child.name) ? "Trẻ" : request.owner.child.name;
-            string time = request.log.completedAt.ToDateTime().ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+            string time = request.log.completedAt.Value.ToDateTime().ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
             string label = $"{childName} · {time}";
             if (isApproving)
                 label += "\nĐang xác nhận...";
@@ -465,13 +491,13 @@ public class ParentConfirm : MonoBehaviour
         string childId = request.owner.child.childId;
         string habitId = request.log.habitId;
         string dateKey = request.log.dateKey;
-        Timestamp expectedCompletedAt = request.log.completedAt;
+        Timestamp expectedCompletedAt = request.log.completedAt.Value;
         failures.Remove(request.key);
         RefreshViews();
 
         try
         {
-            bool success = await HabitLog.ApproveHabitLogAsync(parentId, childId, habitId, dateKey, expectedCompletedAt);
+            bool success = await HabitRewardService.ApprovePendingLogForChildAsync(parentId, childId, request.log.logId, expectedCompletedAt);
             if (success)
                 confirmedRequests.Add(request.key);
             if (!IsCurrentChild(request.owner, version))

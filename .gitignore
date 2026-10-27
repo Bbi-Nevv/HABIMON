@@ -104,3 +104,19 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+docs/
+.claude/skills/
+AGENTS.md
+CLAUDE.md
+
+# Firebase CLI and local tooling
+/node_modules/
+/.firebase/
+/firebase-debug.log
+/firestore-debug.log
+/ui-debug.log
+
+# Retired duplicate Firebase input; use the platform configs.
+/Assets/Data/google-services.json
+/Assets/Data/google-services.json.meta

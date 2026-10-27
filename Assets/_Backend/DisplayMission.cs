@@ -1,4 +1,5 @@
 using Firebase.Firestore;
+using HABIMON.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,6 +30,10 @@ public class DisplayMission : MonoBehaviour
     private string loadedDateKey = string.Empty;
     private ListenerRegistration habitLogsListener;
     private int habitLoadVersion;
+    private int loadedGeneration;
+    private FirebaseManager subscribedManager;
+    [SerializeField] private Sprite fallbackIcon;
+    [SerializeField] private Sprite bookIcon;
     private int logSnapshotRevision;
     private bool hasStarted;
     private bool hasLogSnapshot;
@@ -54,6 +59,7 @@ public class DisplayMission : MonoBehaviour
 
     private void OnEnable()
     {
+        SubscribeToSession();
         if (hasStarted)
             _ = LoadHabitsAsync();
     }
@@ -61,6 +67,7 @@ public class DisplayMission : MonoBehaviour
     private void OnDisable()
     {
         ++habitLoadVersion;
+        UnsubscribeFromSession();
         StopHabitLogListener();
         foreach (MissionItem item in visibleItems.Values)
         {
@@ -72,6 +79,7 @@ public class DisplayMission : MonoBehaviour
     private void OnDestroy()
     {
         ++habitLoadVersion;
+        UnsubscribeFromSession();
         StopHabitLogListener();
     }
 
@@ -129,23 +137,17 @@ public class DisplayMission : MonoBehaviour
 
         try
         {
-            while (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
-            {
-                if (!IsCurrentRequest(requestVersion))
-                    return;
-                await Task.Delay(100);
-            }
-
-            if (!IsCurrentRequest(requestVersion))
-                return;
-
             FirebaseManager manager = FirebaseManager.Instance;
+            if (manager == null || !await manager.EnsureInitializedAsync() || !IsCurrentRequest(requestVersion))
+                return;
+            SubscribeToSession();
             string parentId = manager.GetCurrentParentId();
             string childId = string.IsNullOrEmpty(requestedChildId) ? manager.GetCurrentChildId() : requestedChildId;
             if (string.IsNullOrEmpty(childId))
                 childId = await manager.ResolveCurrentChildIdAsync();
 
-            if (!IsCurrentRequest(requestVersion))
+            if (!IsCurrentRequest(requestVersion) || manager != FirebaseManager.Instance ||
+                parentId != manager.GetCurrentParentId() || childId != manager.GetCurrentChildId())
                 return;
 
             if (string.IsNullOrEmpty(parentId) || string.IsNullOrEmpty(childId))
@@ -156,8 +158,9 @@ public class DisplayMission : MonoBehaviour
 
             loadedParentId = parentId;
             loadedChildId = childId;
+            loadedGeneration = manager.SessionGeneration;
             var habits = await manager.GetHabitsAsync(parentId, childId);
-            if (!IsCurrentRequest(requestVersion))
+            if (!IsCurrentScope(requestVersion))
                 return;
 
             allHabits.AddRange(habits.Where(habit => habit != null));
@@ -192,10 +195,10 @@ public class DisplayMission : MonoBehaviour
             if (habit == null)
                 continue;
 
-            if (!habit.isActive)
+            if (!HabitLog.IsScheduledForDate(habit, HabitLog.GetBusinessDate(DateTimeOffset.UtcNow)))
                 continue;
 
-            if (!IsAllPeriod(period) && !MatchesPeriod(habit.timeTarget, period))
+            if (!IsAllPeriod(period) && !HabitSchedule.FromStorage(habit.scheduleKind, habit.scheduleValue, habit.timeTarget).MatchesPeriod(period))
                 continue;
 
             SpawnItem(habit);
@@ -206,32 +209,6 @@ public class DisplayMission : MonoBehaviour
     {
         return string.Equals(period?.Trim(), "Tất cả", System.StringComparison.OrdinalIgnoreCase)
             || string.Equals(period?.Trim(), "All", System.StringComparison.OrdinalIgnoreCase);
-    }
-
-    private bool MatchesPeriod(string timeTarget, string targetPeriod)
-    {
-        if (string.IsNullOrWhiteSpace(timeTarget))
-            return false;
-
-        string target = targetPeriod?.Trim();
-        string input = timeTarget.Trim();
-
-        if (string.IsNullOrEmpty(target))
-            return false;
-
-        var normalizedTarget = target.ToLowerInvariant();
-        var normalizedInput = input.ToLowerInvariant();
-
-        if (normalizedTarget.Contains("sáng") || normalizedTarget.Contains("morning"))
-            return normalizedInput.Contains("sáng") || normalizedInput.Contains("morning");
-
-        if (normalizedTarget.Contains("chiều") || normalizedTarget.Contains("afternoon"))
-            return normalizedInput.Contains("chiều") || normalizedInput.Contains("afternoon");
-
-        if (normalizedTarget.Contains("tối") || normalizedTarget.Contains("evening") || normalizedTarget.Contains("night"))
-            return normalizedInput.Contains("tối") || normalizedInput.Contains("evening") || normalizedInput.Contains("night");
-
-        return normalizedInput == normalizedTarget;
     }
 
     private void ClearItems()
@@ -335,13 +312,44 @@ public class DisplayMission : MonoBehaviour
         return this != null && isActiveAndEnabled && requestVersion == habitLoadVersion;
     }
 
+    private bool IsCurrentScope(int requestVersion)
+    {
+        FirebaseManager manager = FirebaseManager.Instance;
+        return IsCurrentRequest(requestVersion) && manager != null && manager == subscribedManager &&
+            loadedGeneration == manager.SessionGeneration && loadedParentId == manager.GetCurrentParentId() &&
+            loadedChildId == manager.GetCurrentChildId();
+    }
+
+    private void SubscribeToSession()
+    {
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null || manager == subscribedManager) return;
+        UnsubscribeFromSession();
+        subscribedManager = manager;
+        manager.SessionChanged += ReloadForSession;
+        manager.CurrentChildChanged += ReloadForSession;
+    }
+
+    private void UnsubscribeFromSession()
+    {
+        if (subscribedManager == null) return;
+        subscribedManager.SessionChanged -= ReloadForSession;
+        subscribedManager.CurrentChildChanged -= ReloadForSession;
+        subscribedManager = null;
+    }
+
+    private void ReloadForSession()
+    {
+        if (hasStarted && isActiveAndEnabled) _ = LoadHabitsAsync();
+    }
+
     private void StartHabitLogListener(FirebaseManager manager, int requestVersion)
     {
         try
         {
             habitLogsListener = manager.ListenHabitLogsForDate(loadedParentId, loadedChildId, loadedDateKey, logs =>
             {
-                if (!IsCurrentRequest(requestVersion))
+                if (!IsCurrentScope(requestVersion))
                     return;
 
                 ++logSnapshotRevision;
@@ -383,11 +391,11 @@ public class DisplayMission : MonoBehaviour
         }
         catch (Exception ex)
         {
-            if (IsCurrentRequest(requestVersion))
+            if (IsCurrentScope(requestVersion))
                 Debug.LogError($"[DisplayMission] Theo dõi nhiệm vụ bị gián đoạn: {ex.Message}");
         }
 
-        if (IsCurrentRequest(requestVersion))
+        if (IsCurrentScope(requestVersion))
         {
             logListenerFailed = true;
             RenderItems();
@@ -405,7 +413,7 @@ public class DisplayMission : MonoBehaviour
 
     private async Task SaveCompletionAsync(string habitId, bool isOn, int requestVersion)
     {
-        if (!IsCurrentRequest(requestVersion))
+        if (!IsCurrentScope(requestVersion))
             return;
 
         string changeKey = GetPendingChangeKey(habitId);
@@ -427,13 +435,13 @@ public class DisplayMission : MonoBehaviour
         try
         {
             FirebaseManager manager = FirebaseManager.Instance;
-            bool success = await manager.SetHabitCompletionAsync(parentId, childId, habitId, dateKey, isOn);
-            if (!IsCurrentRequest(requestVersion))
+            bool success = await HabitRewardService.SetTodayCompletionAsync(parentId, childId, habitId, dateKey, isOn);
+            if (!IsCurrentScope(requestVersion))
                 return;
 
             int refreshRevision = logSnapshotRevision;
             HabitLogModel freshLog = await manager.GetHabitLogAsync(parentId, childId, habitId, dateKey);
-            if (!IsCurrentRequest(requestVersion))
+            if (!IsCurrentScope(requestVersion))
                 return;
 
             todayLogs.TryGetValue(habitId, out HabitLogModel cachedLog);
@@ -450,7 +458,7 @@ public class DisplayMission : MonoBehaviour
         }
         catch (Exception ex)
         {
-            if (IsCurrentRequest(requestVersion))
+            if (IsCurrentScope(requestVersion))
             {
                 hasLogSnapshot = false;
                 itemErrors[habitId] = "Không thể đồng bộ trạng thái. Vui lòng mở lại danh sách.";
@@ -459,10 +467,15 @@ public class DisplayMission : MonoBehaviour
         }
         finally
         {
-            pendingChanges.Remove(changeKey);
-            if (this != null && isActiveAndEnabled)
-                RenderItems();
+            FinishPendingChange(changeKey);
         }
+    }
+
+    private void FinishPendingChange(string changeKey)
+    {
+        pendingChanges.Remove(changeKey);
+        if (IsCurrentScope(habitLoadVersion))
+            RenderItems();
     }
 
     private string GetPendingChangeKey(string habitId)
@@ -492,7 +505,7 @@ public class DisplayMission : MonoBehaviour
 
         string status;
         if (isApproved)
-            status = "Đã được phụ huynh xác nhận";
+            status = log.requiresApprovalAtCompletion == false ? "Đã hoàn thành hôm nay" : "Đã được phụ huynh xác nhận";
         else if (!canEditToday)
             status = "Đã khóa lịch sử ngày cũ";
         else if (isSaving)
@@ -519,6 +532,10 @@ public class DisplayMission : MonoBehaviour
 
     private Sprite GetSpriteByKey(string iconKey)
     {
+        if (string.Equals(iconKey, "icon_book", StringComparison.OrdinalIgnoreCase))
+            return bookIcon != null ? bookIcon : fallbackIcon;
+        if (string.Equals(iconKey, "icon_default", StringComparison.OrdinalIgnoreCase))
+            return fallbackIcon;
         if (string.IsNullOrEmpty(iconKey) || iconSprites == null)
             return null;
 

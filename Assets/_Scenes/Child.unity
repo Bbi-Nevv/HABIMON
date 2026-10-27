@@ -2441,10 +2441,10 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1853017755}
-        m_TargetAssemblyTypeName: UnityEngine.GameObject, UnityEngine
-        m_MethodName: SetActive
-        m_Mode: 6
+      - m_Target: {fileID: 1321109262}
+        m_TargetAssemblyTypeName: Pin, Assembly-CSharp
+        m_MethodName: OpenVerifyPopup
+        m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
@@ -7724,7 +7724,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 05b0f5a64e5b62047b133aa1a3bd50e0, type: 3}
   - {fileID: 21300000, guid: 544ac1041b4b0d6429f02058b6dcbf72, type: 3}
   - {fileID: 21300000, guid: b65c9f701249a284e802685685120fd8, type: 3}
-  - {fileID: 21300000, guid: 8a340e82fd915ea449d84491cd50dca6, type: 3}
+  - {fileID: -3401245754914414353, guid: 8a340e82fd915ea449d84491cd50dca6, type: 3}
   - {fileID: 21300000, guid: 03971edaa54353e4ca93791fb0bc96a8, type: 3}
   - {fileID: 21300000, guid: a51c8927dbc0395429e3b88f40f48b6c, type: 3}
   - {fileID: 21300000, guid: 3225a167665d1dd41bca2dea52df591b, type: 3}
@@ -7732,6 +7732,8 @@ MonoBehaviour:
   - {fileID: 21300000, guid: b952e85312c102e47ad71dfa57f8c076, type: 3}
   - {fileID: 21300000, guid: e24081018caf9fd48b8956d4054de8a5, type: 3}
   - {fileID: 21300000, guid: b0967b0ed72386e40bd268be208829ec, type: 3}
+  fallbackIcon: {fileID: 21300000, guid: 60c5195fda4c1e540a8c18293cf1ccd8, type: 3}
+  bookIcon: {fileID: -3401245754914414353, guid: 8a340e82fd915ea449d84491cd50dca6, type: 3}
 --- !u!1 &1321109261
 GameObject:
   m_ObjectHideFlags: 0
@@ -16947,6 +16949,10 @@ MonoBehaviour:
   - {fileID: 1746553252}
   - {fileID: 928641548}
   additionalItems: []
+  legacyStartingItems:
+  - {fileID: 11400000, guid: c8ba19fb117924741b0b44f7c3c3f020, type: 2}
+  - {fileID: 11400000, guid: b7c9dd92e76651f459a10d117e03748f, type: 2}
+  - {fileID: 11400000, guid: 9ccbdc7702b28884688df17190667e9b, type: 2}
   playerPrefsPrefix: Habimon.Equipment
 --- !u!114 &2099999010
 MonoBehaviour:
@@ -17026,7 +17032,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AchievementProgressView
   mascotSprite: {fileID: 7888141139028744870, guid: 3471e2b8e538f8341ac75902f083c763, type: 3}
-  waterSprite: {fileID: 8509550459451208454, guid: b45c3c4a0908bcd47a81e4f5443615bd, type: 3}
+  waterSprite: {fileID: 21300000, guid: b45c3c4a0908bcd47a81e4f5443615bd, type: 3}
   fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   dotCount: 6
 --- !u!224 &447559771597655921

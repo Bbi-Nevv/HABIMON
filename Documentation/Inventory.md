@@ -41,6 +41,8 @@ Danh sách sprite cũ **Accessory Images** vẫn được giữ để không m�
 
 Scene Child đã gắn **SaveEquipment** trên Canvas đang hoạt động, tham chiếu Inventory cùng hai Accessory của monster chính và bản xem trước. Đổi đồ trong túi sẽ cập nhật cả hai bản và lưu ngay; khi panel túi còn tắt, monster chính vẫn khôi phục được trang bị.
 
+`legacyStartingItems` giữ danh sách 3 kính từng miễn phí ở bản main cũ. Khi mở bản mới, SaveEquipment chỉ tạo ownership receipt nếu một ID trong danh sách đang được lưu ở đúng slot trang bị; các kính khác vẫn theo milestone mới.
+
 Để dùng ở scene khác, đặt **SaveEquipment** trên GameObject hoạt động ngay lúc vào scene và giữ bật trong lúc đổi đồ. Gán **Inventory** làm danh sách dữ liệu Item; **Accessory Displays** là các bản hiển thị của cùng một monster. **Additional Items** bổ sung những Item không có trong Inventory nhưng cần khôi phục. Tránh để hai SaveEquipment cùng điều khiển một Accessory.
 
 Mỗi Item có ID được lấy từ GUID của asset trong Editor, không phụ thuộc tên hoặc thứ tự trong túi. Các asset Item hiện có đã được điền ID. Khi tạo Item mới, Unity tự cập nhật ID qua OnValidate. Khi đổi chỗ asset, giữ kèm file `.meta` để giữ ID.

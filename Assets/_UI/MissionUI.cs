@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,6 +13,8 @@ public class MissionUI : MonoBehaviour
     [SerializeField] private RectTransform button;
     [SerializeField] private TMP_Text nameChildText;
     [SerializeField] private List<Sprite> iconSprites;
+    [SerializeField] private Sprite fallbackIcon;
+    [SerializeField] private Sprite bookIcon;
 
     private Dictionary<string, Sprite> iconLookup;
 
@@ -42,6 +45,11 @@ public class MissionUI : MonoBehaviour
         if (string.IsNullOrEmpty(iconKey))
             return null;
 
+        if (string.Equals(iconKey, "icon_book", StringComparison.OrdinalIgnoreCase))
+            return bookIcon != null ? bookIcon : fallbackIcon;
+        if (string.Equals(iconKey, "icon_default", StringComparison.OrdinalIgnoreCase))
+            return fallbackIcon;
+
         if (iconLookup == null)
             BuildIconLookup();
 
@@ -66,7 +74,11 @@ public class MissionUI : MonoBehaviour
         }
     }
 
-    public void SpawnHabitItem(HabitModel habit, string habitId, Action<string> onDelete = null, Action<string, bool> onActiveChanged = null)
+    public void SpawnHabitItem(
+        HabitModel habit,
+        string habitId,
+        Action<string> onDelete = null,
+        Func<string, bool, Task<bool>> onActiveChanged = null)
     {
         if (contentTransform == null || habit == null)
         {
@@ -74,8 +86,9 @@ public class MissionUI : MonoBehaviour
             return;
         }
         GameObject newItem = Instantiate(itemPrefab, contentTransform);
-        newItem.transform.SetSiblingIndex(button.GetSiblingIndex());
-        
+        if (button != null && button.parent == contentTransform)
+            newItem.transform.SetSiblingIndex(button.GetSiblingIndex());
+
         TMP_Text[] texts = newItem.GetComponentsInChildren<TMP_Text>(true);
 
         Image iconImage = newItem.transform.Find("icon")?.GetComponent<Image>();
@@ -87,6 +100,7 @@ public class MissionUI : MonoBehaviour
 
         if (texts.Length > 1)
             texts[1].text = habit.description;
+        TMP_Text descriptionText = texts.Length > 1 ? texts[1] : null;
 
         if (iconImage != null)
         {
@@ -98,6 +112,8 @@ public class MissionUI : MonoBehaviour
             else
             {
                 iconImage.sprite = GetSpriteByIconKey("icon_default");
+                if (iconImage.sprite == null && iconSprites != null && iconSprites.Count > 0)
+                    iconImage.sprite = iconSprites[0];
                 if (iconImage.sprite == null)
                     Debug.LogWarning($"[MissionUI] Không tìm thấy sprite cho iconKey='{habit.icon}' trong iconSprites.");
             }
@@ -111,23 +127,59 @@ public class MissionUI : MonoBehaviour
         if (activeToggle != null)
         {
             activeToggle.SetIsOnWithoutNotify(habit.isActive);
-            activeToggle.onValueChanged.RemoveAllListeners();
-            activeToggle.onValueChanged.AddListener(isActive =>
-            {
-                habit.isActive = isActive;
-                onActiveChanged?.Invoke(habitId, isActive);
-            });
+            if (onActiveChanged == null)
+                activeToggle.interactable = false;
+            else
+                activeToggle.onValueChanged.AddListener(isActive =>
+                    _ = SaveActiveStateAsync(newItem, activeToggle, descriptionText, habit, habitId, isActive, onActiveChanged));
         }
 
         Button deleteButton = newItem.transform.Find("Button")?.GetComponent<Button>();
         if (deleteButton != null && !string.IsNullOrEmpty(habitId))
         {
-            deleteButton.onClick.RemoveAllListeners();
             deleteButton.onClick.AddListener(() => onDelete?.Invoke(habitId));
         }
 
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate(contentTransform as RectTransform);
+    }
+
+    private static async Task SaveActiveStateAsync(
+        GameObject item,
+        Toggle toggle,
+        TMP_Text descriptionText,
+        HabitModel habit,
+        string habitId,
+        bool isActive,
+        Func<string, bool, Task<bool>> save)
+    {
+        bool previousValue = !isActive;
+        toggle.interactable = false;
+        bool saved = false;
+        try
+        {
+            saved = await save(habitId, isActive);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[MissionUI] Không thể lưu trạng thái thói quen: {ex.Message}");
+        }
+
+        if (item == null || toggle == null)
+            return;
+
+        toggle.interactable = true;
+        if (!saved)
+        {
+            toggle.SetIsOnWithoutNotify(previousValue);
+            if (descriptionText != null)
+                descriptionText.text = $"{habit.description}\nKhông thể lưu trạng thái. Hãy thử lại.";
+            return;
+        }
+
+        habit.isActive = isActive;
+        if (descriptionText != null)
+            descriptionText.text = habit.description;
     }
 
 }

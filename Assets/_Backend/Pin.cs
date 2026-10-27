@@ -16,6 +16,8 @@ public class Pin : MonoBehaviour
 	[SerializeField] private TMP_InputField confirmPinInput;
 	[SerializeField] private Button changePinButton;
 	[SerializeField] private TMP_Text changeStatusText;
+	[SerializeField] private GameObject changePinPopup;
+	[SerializeField] private Button changePinPopupBackButton;
 
 	[Header("Verify PIN Popup")]
 	[SerializeField] private TMP_InputField verifyPinInput;
@@ -24,14 +26,29 @@ public class Pin : MonoBehaviour
 	[SerializeField] private TMP_Text verifyStatusText;
 
 	private int failedAttempts;
+	private bool isVerifying;
+	private bool isChanging;
+	private bool isCheckingPinState;
+	private bool pinStateCheckFailed;
+	private bool initialPinSetupRequired;
+	private string verifyButtonDefaultLabel;
+	private string changePinButtonDefaultLabel;
 
 	private void Awake()
 	{
 		if (changePinButton != null)
+		{
+			TMP_Text label = changePinButton.GetComponentInChildren<TMP_Text>(true);
+			changePinButtonDefaultLabel = label != null ? label.text : string.Empty;
 			changePinButton.onClick.AddListener(OnChangePinClicked);
+		}
 
 		if (verifyPinButton != null)
+		{
+			TMP_Text label = verifyPinButton.GetComponentInChildren<TMP_Text>(true);
+			verifyButtonDefaultLabel = label != null ? label.text : string.Empty;
 			verifyPinButton.onClick.AddListener(OnVerifyPinClicked);
+		}
 	}
 
 	private void OnDestroy()
@@ -43,20 +60,35 @@ public class Pin : MonoBehaviour
 			verifyPinButton.onClick.RemoveListener(OnVerifyPinClicked);
 	}
 
+	private async void Start()
+	{
+		if (currentPinInput == null || changePinPopup == null)
+			return;
+		await CheckParentPinStateAsync();
+	}
+
 	public void OpenVerifyPopup()
 	{
-		failedAttempts = 0;
+		if (verifyPinInput != null)
+			verifyPinInput.gameObject.SetActive(true);
+		SetVerifyButtonLabel(verifyButtonDefaultLabel);
 
 		if (verifyPinButton != null)
-			verifyPinButton.interactable = true;
+			verifyPinButton.interactable = !isVerifying && failedAttempts < MaxAttempts;
 
 		if (verifyPinInput != null)
 			verifyPinInput.text = string.Empty;
 
-		SetStatus(verifyStatusText, string.Empty, Color.white);
+		bool locked = failedAttempts >= MaxAttempts;
+		SetStatus(verifyStatusText, locked
+			? "Bạn đã nhập sai PIN 3 lần. Hãy thử lại sau khi mở lại ứng dụng."
+			: string.Empty, locked ? Color.red : Color.white);
 
 		if (verifyPopup != null)
+		{
 			verifyPopup.SetActive(true);
+			verifyPopup.transform.SetAsLastSibling();
+		}
 	}
 
 	public void CloseVerifyPopup()
@@ -67,44 +99,102 @@ public class Pin : MonoBehaviour
 
 	private async void OnVerifyPinClicked()
 	{
-		if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+		if (isVerifying || failedAttempts >= MaxAttempts)
+			return;
+
+		FirebaseManager manager = FirebaseManager.Instance;
+		if (manager == null)
 		{
-			SetStatus(verifyStatusText, "Firebase chưa sẵn sàng.", Color.red);
+			SetStatus(verifyStatusText, "Không tìm thấy FirebaseManager.", Color.red);
 			return;
 		}
 
 		string pin = verifyPinInput != null ? verifyPinInput.text.Trim() : string.Empty;
 
-		if (!IsValidPin(pin))
+		isVerifying = true;
+		if (verifyPinButton != null)
+			verifyPinButton.interactable = false;
+		try
 		{
-			SetStatus(verifyStatusText, "PIN phải gồm đúng 4 chữ số.", Color.red);
-			return;
-		}
+			if (!await manager.EnsureInitializedAsync())
+			{
+				SetStatus(verifyStatusText, "Firebase chưa sẵn sàng.", Color.red);
+				return;
+			}
 
-		bool verified = await FirebaseManager.Instance.VerifyParentPinAsync(pin);
-		if (verified)
+			ParentPinState pinState = await manager.GetParentPinStateAsync();
+			if (pinState == ParentPinState.NotAuthenticated)
+			{
+				SetStatus(verifyStatusText, "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", Color.red);
+				return;
+			}
+			if (pinState == ParentPinState.FirebaseUnavailable || pinState == ParentPinState.ParentProfileMissing)
+			{
+				SetStatus(verifyStatusText, "Không thể đọc hồ sơ phụ huynh. Hãy kiểm tra kết nối rồi thử lại.", Color.red);
+				return;
+			}
+
+			if (pinState == ParentPinState.NotConfigured)
+			{
+				SceneManager.LoadScene(ParentSceneName);
+				return;
+			}
+
+			if (verifyPinInput != null)
+				verifyPinInput.gameObject.SetActive(true);
+			SetVerifyButtonLabel(verifyButtonDefaultLabel);
+			if (!IsValidPin(pin))
+			{
+				SetStatus(verifyStatusText, "PIN phải gồm đúng 4 chữ số.", Color.red);
+				return;
+			}
+
+			bool verified = await manager.VerifyParentPinAsync(pin);
+			if (verified)
+			{
+				SceneManager.LoadScene(ParentSceneName);
+				return;
+			}
+
+			failedAttempts++;
+			if (failedAttempts >= MaxAttempts)
+			{
+				SetStatus(verifyStatusText, "Bạn đã nhập sai PIN 3 lần.", Color.red);
+				return;
+			}
+
+			SetStatus(verifyStatusText, $"PIN không đúng. Còn {MaxAttempts - failedAttempts} lần thử.", Color.red);
+		}
+		catch (System.Exception ex)
 		{
-			SceneManager.LoadScene(ParentSceneName);
-			return;
+			Debug.LogError($"[Pin] Không thể kiểm tra mã phụ huynh: {ex.Message}");
+			SetStatus(verifyStatusText, "Không thể kiểm tra mã. Vui lòng thử lại.", Color.red);
 		}
-
-		failedAttempts++;
-		if (failedAttempts >= MaxAttempts)
+		finally
 		{
-			SetStatus(verifyStatusText, "Bạn đã nhập sai PIN 3 lần.", Color.red);
-			if (verifyPinButton != null)
-				verifyPinButton.interactable = false;
-			return;
+			if (this != null)
+			{
+				isVerifying = false;
+				if (verifyPinButton != null && failedAttempts < MaxAttempts)
+					verifyPinButton.interactable = true;
+			}
 		}
-
-		SetStatus(verifyStatusText, $"PIN không đúng. Còn {MaxAttempts - failedAttempts} lần thử.", Color.red);
 	}
 
 	private async void OnChangePinClicked()
 	{
-		if (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
+		if (isChanging || isCheckingPinState)
+			return;
+		if (pinStateCheckFailed)
 		{
-			SetStatus(changeStatusText, "Firebase chưa sẵn sàng.", Color.red);
+			await CheckParentPinStateAsync();
+			return;
+		}
+
+		FirebaseManager manager = FirebaseManager.Instance;
+		if (manager == null)
+		{
+			SetStatus(changeStatusText, "Không tìm thấy FirebaseManager.", Color.red);
 			return;
 		}
 
@@ -112,9 +202,9 @@ public class Pin : MonoBehaviour
 		string newPin = newPinInput != null ? newPinInput.text.Trim() : string.Empty;
 		string confirmPin = confirmPinInput != null ? confirmPinInput.text.Trim() : string.Empty;
 
-		if (!IsValidPin(currentPin) || !IsValidPin(newPin) || !IsValidPin(confirmPin))
+		if (!IsValidPin(newPin) || !IsValidPin(confirmPin))
 		{
-			SetStatus(changeStatusText, "Mỗi mã PIN phải gồm đúng 4 chữ số.", Color.red);
+			SetStatus(changeStatusText, "Mã PIN mới phải gồm đúng 4 chữ số.", Color.red);
 			return;
 		}
 
@@ -124,23 +214,76 @@ public class Pin : MonoBehaviour
 			return;
 		}
 
+		isChanging = true;
 		if (changePinButton != null)
 			changePinButton.interactable = false;
-
-		bool changed = await FirebaseManager.Instance.ChangeParentPinAsync(currentPin, newPin);
-
-		if (changed)
+		try
 		{
-			SetStatus(changeStatusText, "Đổi mã PIN thành công.", Color.green);
-			ClearChangeInputs();
-		}
-		else
-		{
-			SetStatus(changeStatusText, "Mã PIN hiện tại không đúng hoặc hệ thống chưa sẵn sàng.", Color.red);
-		}
+			if (!await manager.EnsureInitializedAsync())
+			{
+				SetStatus(changeStatusText, "Firebase chưa sẵn sàng.", Color.red);
+				return;
+			}
 
-		if (changePinButton != null)
-			changePinButton.interactable = true;
+			ParentPinState pinState = await manager.GetParentPinStateAsync();
+			if (pinState == ParentPinState.NotAuthenticated ||
+				pinState == ParentPinState.FirebaseUnavailable ||
+				pinState == ParentPinState.ParentProfileMissing)
+			{
+				SetStatus(changeStatusText, "Không thể xác minh hồ sơ phụ huynh. Hãy đăng nhập lại hoặc kiểm tra kết nối.", Color.red);
+				return;
+			}
+			if (pinState == ParentPinState.NotConfigured && !initialPinSetupRequired)
+			{
+				OpenInitialPinSetupGate();
+				return;
+			}
+
+			bool hasPin = pinState == ParentPinState.Configured;
+			if ((hasPin && !IsValidPin(currentPin)) || (!hasPin && !string.IsNullOrEmpty(currentPin)))
+			{
+				SetStatus(changeStatusText, hasPin
+					? "Mã PIN hiện tại phải gồm đúng 4 chữ số."
+					: "Chưa có mã hiện tại. Để trống ô này để tạo mã phụ huynh.", Color.red);
+				return;
+			}
+
+			bool changed = await manager.ChangeParentPinAsync(currentPin, newPin);
+			if (changed)
+			{
+				ClearChangeInputs();
+				if (initialPinSetupRequired)
+				{
+					initialPinSetupRequired = false;
+					pinStateCheckFailed = false;
+					if (changePinPopupBackButton != null)
+						changePinPopupBackButton.interactable = true;
+					SetInitialPinSetupLayout(false);
+					SetChangePinButtonLabel(changePinButtonDefaultLabel);
+					changePinPopup.SetActive(false);
+				}
+				else
+					SetStatus(changeStatusText, "Lưu mã phụ huynh thành công.", Color.green);
+			}
+			else
+			{
+				SetStatus(changeStatusText, "Mã hiện tại không đúng hoặc không thể lưu.", Color.red);
+			}
+		}
+		catch (System.Exception ex)
+		{
+			Debug.LogError($"[Pin] Không thể lưu mã phụ huynh: {ex.Message}");
+			SetStatus(changeStatusText, "Không thể lưu mã phụ huynh. Vui lòng thử lại.", Color.red);
+		}
+		finally
+		{
+			if (this != null)
+			{
+				isChanging = false;
+				if (changePinButton != null)
+					changePinButton.interactable = true;
+			}
+		}
 	}
 
 	private static bool IsValidPin(string pin)
@@ -155,6 +298,164 @@ public class Pin : MonoBehaviour
 
 		statusText.text = message;
 		statusText.color = color;
+	}
+
+	private void SetVerifyButtonLabel(string label)
+	{
+		if (verifyPinButton == null || string.IsNullOrEmpty(label))
+			return;
+
+		TMP_Text buttonText = verifyPinButton.GetComponentInChildren<TMP_Text>(true);
+		if (buttonText != null)
+			buttonText.text = label;
+	}
+
+	private void SetChangePinButtonLabel(string label)
+	{
+		if (changePinButton == null || string.IsNullOrEmpty(label))
+			return;
+
+		TMP_Text buttonText = changePinButton.GetComponentInChildren<TMP_Text>(true);
+		if (buttonText != null)
+			buttonText.text = label;
+	}
+
+	private async Task CheckParentPinStateAsync()
+	{
+		if (isCheckingPinState || changePinPopup == null)
+			return;
+
+		isCheckingPinState = true;
+		pinStateCheckFailed = false;
+		initialPinSetupRequired = false;
+		changePinPopup.SetActive(true);
+		changePinPopup.transform.SetAsLastSibling();
+		if (currentPinInput != null) currentPinInput.gameObject.SetActive(false);
+		if (newPinInput != null) newPinInput.gameObject.SetActive(false);
+		if (confirmPinInput != null) confirmPinInput.gameObject.SetActive(false);
+		if (changePinPopupBackButton != null) changePinPopupBackButton.interactable = false;
+		if (changePinButton != null) changePinButton.interactable = false;
+		SetChangePinButtonLabel("Đang kiểm tra...");
+		SetStatus(changeStatusText, "Đang kiểm tra trạng thái PIN phụ huynh...", Color.white);
+
+		try
+		{
+			FirebaseManager manager = FirebaseManager.Instance;
+			if (manager == null)
+				throw new System.InvalidOperationException("Không tìm thấy FirebaseManager.");
+			if (!await manager.EnsureInitializedAsync())
+				throw new System.InvalidOperationException("Firebase chưa sẵn sàng.");
+
+			int sessionGeneration = manager.SessionGeneration;
+			string parentId = manager.GetCurrentParentId();
+			ParentPinState pinState = await manager.GetParentPinStateAsync();
+			if (this == null)
+				return;
+			if (manager != FirebaseManager.Instance || sessionGeneration != manager.SessionGeneration ||
+				parentId != manager.GetCurrentParentId())
+			{
+				ShowPinStateCheckFailure("Phiên đăng nhập vừa thay đổi. Hãy kiểm tra lại.");
+				return;
+			}
+
+			if (pinState == ParentPinState.Configured)
+			{
+				changePinPopup.SetActive(false);
+				if (changePinPopupBackButton != null) changePinPopupBackButton.interactable = true;
+				SetInitialPinSetupLayout(false);
+				if (newPinInput != null) newPinInput.gameObject.SetActive(true);
+				if (confirmPinInput != null) confirmPinInput.gameObject.SetActive(true);
+				SetChangePinButtonLabel(changePinButtonDefaultLabel);
+				ClearChangeInputs();
+				return;
+			}
+
+			if (pinState == ParentPinState.NotConfigured)
+			{
+				OpenInitialPinSetupGate();
+				return;
+			}
+
+			throw new System.InvalidOperationException(pinState == ParentPinState.NotAuthenticated
+				? "Phiên đăng nhập phụ huynh đã hết hạn."
+				: "Không thể đọc hồ sơ phụ huynh.");
+		}
+		catch (System.Exception ex)
+		{
+			if (this != null)
+			{
+				Debug.LogWarning($"[Pin] Chưa thể xác minh trạng thái PIN: {ex.GetType().Name}");
+				ShowPinStateCheckFailure("Không thể xác minh PIN. Kiểm tra kết nối rồi nhấn Thử lại.");
+			}
+		}
+		finally
+		{
+			if (this != null)
+				isCheckingPinState = false;
+		}
+	}
+
+	private void ShowPinStateCheckFailure(string message)
+	{
+		pinStateCheckFailed = true;
+		initialPinSetupRequired = false;
+		changePinPopup.SetActive(true);
+		changePinPopup.transform.SetAsLastSibling();
+		if (currentPinInput != null) currentPinInput.gameObject.SetActive(false);
+		if (newPinInput != null) newPinInput.gameObject.SetActive(false);
+		if (confirmPinInput != null) confirmPinInput.gameObject.SetActive(false);
+		if (changePinPopupBackButton != null) changePinPopupBackButton.interactable = false;
+		SetStatus(changeStatusText, message, Color.red);
+		SetChangePinButtonLabel("Thử lại");
+		if (changePinButton != null) changePinButton.interactable = true;
+	}
+
+	private void OpenInitialPinSetupGate()
+	{
+		initialPinSetupRequired = true;
+		pinStateCheckFailed = false;
+		changePinPopup.SetActive(true);
+		changePinPopup.transform.SetAsLastSibling();
+		if (currentPinInput != null)
+			currentPinInput.gameObject.SetActive(false);
+		if (newPinInput != null)
+			newPinInput.gameObject.SetActive(true);
+		if (confirmPinInput != null)
+			confirmPinInput.gameObject.SetActive(true);
+		SetChangePinButtonLabel(changePinButtonDefaultLabel);
+		if (changePinButton != null)
+			changePinButton.interactable = true;
+		if (changePinPopupBackButton != null)
+			changePinPopupBackButton.interactable = false;
+		SetInitialPinSetupLayout(true);
+		SetStatus(changeStatusText,
+			"Chưa có PIN. Tạo PIN mới 4 số và xác nhận; để trống ô PIN hiện tại.",
+			Color.red);
+	}
+
+	private void SetInitialPinSetupLayout(bool isFirstSetup)
+	{
+		if (currentPinInput != null)
+			currentPinInput.gameObject.SetActive(!isFirstSetup);
+
+		SetAnchoredY(newPinInput != null ? newPinInput.GetComponent<RectTransform>() : null,
+			isFirstSetup ? 518f : 351f);
+		SetAnchoredY(confirmPinInput != null ? confirmPinInput.GetComponent<RectTransform>() : null,
+			isFirstSetup ? 351f : 184f);
+		SetAnchoredY(changeStatusText != null ? changeStatusText.rectTransform : null,
+			isFirstSetup ? 184f : 7f);
+		SetAnchoredY(changePinButton != null ? changePinButton.transform as RectTransform : null,
+			isFirstSetup ? 28f : -139f);
+	}
+
+	private static void SetAnchoredY(RectTransform rect, float y)
+	{
+		if (rect == null)
+			return;
+
+		Vector2 position = rect.anchoredPosition;
+		position.y = y;
+		rect.anchoredPosition = position;
 	}
 
 	private void ClearChangeInputs()

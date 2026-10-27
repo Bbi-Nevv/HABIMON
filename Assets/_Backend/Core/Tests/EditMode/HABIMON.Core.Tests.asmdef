@@ -1,0 +1,21 @@
+{
+  "name": "HABIMON.Core.Tests",
+  "rootNamespace": "HABIMON.Core.Tests",
+  "references": [
+    "HABIMON.Core",
+    "Unity.TextMeshPro"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

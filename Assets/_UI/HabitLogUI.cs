@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using DG.Tweening;
 using Firebase.Firestore;
+using HABIMON.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -46,12 +47,15 @@ public class HabitLogUI : MonoBehaviour
     {
         public ChildModel child;
         public readonly List<HabitModel> habits = new List<HabitModel>();
-        public readonly Dictionary<string, HabitLogModel> logs = new Dictionary<string, HabitLogModel>();
+        public readonly List<HabitOccurrence> occurrences = new List<HabitOccurrence>();
+        public readonly List<HabitLogModel> logs = new List<HabitLogModel>();
+        public readonly List<HabitCompletion> completions = new List<HabitCompletion>();
         public ListenerRegistration habitsListener;
         public ListenerRegistration logsListener;
         public bool hasHabits;
         public bool hasLogs;
         public bool syncFailed;
+        public int logRequestVersion;
     }
 
     private sealed class ProgressPoint
@@ -59,7 +63,16 @@ public class HabitLogUI : MonoBehaviour
         public ChildProgress owner;
         public int total;
         public int completed;
+        public bool hasUnknownCoverage;
+        public bool hasConflictingRecords;
         public float Ratio => total > 0 ? (float)completed / total : 0f;
+    }
+
+    private sealed class HabitDayDetail
+    {
+        public HabitModel habit;
+        public HabitProgress progress;
+        public HabitLogModel log;
     }
 
     private sealed class BarView
@@ -92,6 +105,8 @@ public class HabitLogUI : MonoBehaviour
     private DateTime weekStart;
     private DateTime selectedDate;
     private string loadedParentId;
+    private int loadedSessionGeneration = -1;
+    private FirebaseManager subscribedManager;
     private bool hasChildren;
     private bool syncFailed;
     private bool renderPending;
@@ -102,7 +117,7 @@ public class HabitLogUI : MonoBehaviour
 
     private void Awake()
     {
-        selectedDate = DateTime.Today;
+        selectedDate = HabitLog.GetBusinessDate(DateTimeOffset.UtcNow);
         weekStart = GetWeekStart(selectedDate);
         HideFilter(dayFilterButton);
         HideFilter(monthFilterButton);
@@ -126,12 +141,17 @@ public class HabitLogUI : MonoBehaviour
         PrepareDetailScroll();
     }
 
-    private void OnEnable() => _ = RefreshAsync();
+    private void OnEnable()
+    {
+        SubscribeToSession();
+        _ = RefreshAsync();
+    }
 
     private void OnDisable()
     {
         ++sessionVersion;
         StopListeners();
+        UnsubscribeFromSession();
         KillBarTweens();
     }
 
@@ -147,6 +167,30 @@ public class HabitLogUI : MonoBehaviour
             retryButton.onClick.RemoveListener(Retry);
     }
 
+    private void SubscribeToSession()
+    {
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null || subscribedManager == manager)
+            return;
+        UnsubscribeFromSession();
+        subscribedManager = manager;
+        subscribedManager.SessionChanged += OnSessionChanged;
+    }
+
+    private void UnsubscribeFromSession()
+    {
+        if (subscribedManager == null)
+            return;
+        subscribedManager.SessionChanged -= OnSessionChanged;
+        subscribedManager = null;
+    }
+
+    private void OnSessionChanged()
+    {
+        if (isActiveAndEnabled)
+            _ = RefreshAsync();
+    }
+
     private void OnApplicationFocus(bool hasFocus)
     {
         if (hasFocus && isActiveAndEnabled && (syncFailed || children.Values.Any(child => child.syncFailed)))
@@ -156,8 +200,17 @@ public class HabitLogUI : MonoBehaviour
     private void LateUpdate()
     {
         FirebaseManager manager = FirebaseManager.Instance;
+        if (manager != subscribedManager)
+        {
+            SubscribeToSession();
+            if (manager != null && isActiveAndEnabled)
+            {
+                _ = RefreshAsync();
+                return;
+            }
+        }
         if (!string.IsNullOrEmpty(loadedParentId) && manager != null
-            && manager.GetCurrentParentId() != loadedParentId)
+            && (manager.GetCurrentParentId() != loadedParentId || manager.SessionGeneration != loadedSessionGeneration))
         {
             _ = RefreshAsync();
             return;
@@ -189,8 +242,11 @@ public class HabitLogUI : MonoBehaviour
 
     private void GoToCurrentWeek()
     {
-        selectedDate = DateTime.Today;
+        DateTime oldWeekStart = weekStart;
+        selectedDate = HabitLog.GetBusinessDate(DateTimeOffset.UtcNow);
         weekStart = GetWeekStart(selectedDate);
+        if (weekStart != oldWeekStart)
+            RefreshLogRanges();
         resetDetailScroll = animateDetails = renderPending = true;
     }
 
@@ -198,6 +254,7 @@ public class HabitLogUI : MonoBehaviour
     {
         weekStart = weekStart.AddDays(direction * 7);
         selectedDate = selectedDate.AddDays(direction * 7);
+        RefreshLogRanges();
         if (generatedChart != null)
         {
             generatedChart.DOKill();
@@ -206,6 +263,19 @@ public class HabitLogUI : MonoBehaviour
         }
         resetDetailScroll = true;
         animateDetails = true;
+        renderPending = true;
+    }
+
+    private void RefreshLogRanges()
+    {
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null || string.IsNullOrEmpty(loadedParentId))
+            return;
+        foreach (ChildProgress state in children.Values)
+        {
+            state.hasLogs = false;
+            _ = RefreshRawLogsForCurrentWeekAsync(manager, state, sessionVersion, loadedParentId);
+        }
         renderPending = true;
     }
 
@@ -226,20 +296,22 @@ public class HabitLogUI : MonoBehaviour
         StopListeners();
         children.Clear();
         loadedParentId = null;
+        loadedSessionGeneration = -1;
         hasChildren = false;
         syncFailed = false;
         renderPending = true;
         try
         {
-            while (FirebaseManager.Instance == null || !FirebaseManager.Instance.IsInitialized)
-            {
-                if (!IsCurrentSession(version))
-                    return;
-                await Task.Delay(100);
-            }
-            if (!IsCurrentSession(version))
-                return;
             FirebaseManager manager = FirebaseManager.Instance;
+            if (manager == null)
+                throw new InvalidOperationException("Không tìm thấy FirebaseManager.");
+            if (!await manager.EnsureInitializedAsync())
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(manager.InitializationError)
+                    ? "Firebase chưa sẵn sàng."
+                    : manager.InitializationError);
+            if (!IsCurrentSession(version) || manager != FirebaseManager.Instance)
+                return;
+            loadedSessionGeneration = manager.SessionGeneration;
             loadedParentId = manager.GetCurrentParentId();
             if (string.IsNullOrEmpty(loadedParentId))
                 throw new InvalidOperationException("Không xác định được tài khoản phụ huynh.");
@@ -253,6 +325,7 @@ public class HabitLogUI : MonoBehaviour
                 if (!IsCurrentSession(version))
                     return;
                 hasChildren = true;
+                items = items ?? new List<ChildModel>();
                 HashSet<string> ids = new HashSet<string>(items
                     .Where(child => child != null && !string.IsNullOrEmpty(child.childId))
                     .Select(child => child.childId));
@@ -299,7 +372,9 @@ public class HabitLogUI : MonoBehaviour
                 if (!IsCurrentChild(state, version))
                     return;
                 state.habits.Clear();
-                state.habits.AddRange(habits.Where(habit => habit != null && !string.IsNullOrEmpty(habit.id)));
+                state.habits.AddRange((habits ?? new List<HabitModel>())
+                    .Where(habit => habit != null && !string.IsNullOrEmpty(habit.id)));
+                RebuildOccurrences(state);
                 state.hasHabits = true;
                 renderPending = true;
             });
@@ -308,14 +383,10 @@ public class HabitLogUI : MonoBehaviour
             {
                 if (!IsCurrentChild(state, version))
                     return;
-                state.logs.Clear();
-                foreach (HabitLogModel log in logs)
-                {
-                    if (log != null && !string.IsNullOrEmpty(log.habitId) && !string.IsNullOrEmpty(log.dateKey))
-                        state.logs[GetLogKey(log.habitId, log.dateKey)] = log;
-                }
-                state.hasLogs = true;
-                renderPending = true;
+                // The shared listener intentionally emits one preferred log per habit/day.
+                // Use its updates as invalidation signals, then fetch this visible week raw so
+                // HabitAnalytics can identify conflicting legacy records instead of hiding them.
+                _ = RefreshRawLogsForCurrentWeekAsync(manager, state, version, loadedParentId);
             });
             _ = ObserveListenerAsync(state.logsListener, version, state);
         }
@@ -349,9 +420,99 @@ public class HabitLogUI : MonoBehaviour
         renderPending = true;
     }
 
+    private async Task RefreshRawLogsForCurrentWeekAsync(
+        FirebaseManager manager,
+        ChildProgress state,
+        int version,
+        string parentId)
+    {
+        int requestVersion = ++state.logRequestVersion;
+        DateTime requestedWeekStart = weekStart.Date;
+        string startDateKey = requestedWeekStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        string endDateKey = requestedWeekStart.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        try
+        {
+            List<HabitLogModel> rawLogs = await manager.GetHabitLogsInRangeAsync(
+                parentId, state.child.childId, startDateKey, endDateKey);
+            if (!IsCurrentChild(state, version) || manager != FirebaseManager.Instance ||
+                manager.SessionGeneration != loadedSessionGeneration || parentId != loadedParentId ||
+                requestedWeekStart != weekStart.Date || requestVersion != state.logRequestVersion)
+                return;
+
+            state.logs.Clear();
+            state.logs.AddRange(rawLogs.Where(log => log != null && !string.IsNullOrEmpty(log.habitId)));
+            RebuildCompletions(state);
+            state.hasLogs = true;
+            renderPending = true;
+        }
+        catch (Exception ex)
+        {
+            if (!IsCurrentChild(state, version) || requestVersion != state.logRequestVersion)
+                return;
+            state.syncFailed = true;
+            Debug.LogWarning($"[HabitLogUI] Không thể tải log tuần của {state.child.name}: {ex.Message}");
+            renderPending = true;
+        }
+    }
+
+    private static void RebuildOccurrences(ChildProgress state)
+    {
+        state.occurrences.Clear();
+        foreach (HabitModel habit in state.habits)
+        {
+            if (habit == null || string.IsNullOrEmpty(habit.id))
+                continue;
+            DateTime? archivedAt = habit.archivedAt.HasValue
+                ? HabitLog.GetBusinessDate(new DateTimeOffset(habit.archivedAt.Value.ToDateTime().ToUniversalTime()))
+                : (DateTime?)null;
+            state.occurrences.Add(new HabitOccurrence
+            {
+                HabitId = habit.id,
+                Schedule = HabitSchedule.FromStorage(habit.scheduleKind, habit.scheduleValue, habit.timeTarget),
+                RepeatDays = habit.repeatDays?.ToArray(),
+                EffectiveFrom = ParseBusinessDate(habit.effectiveFrom),
+                ArchivedAt = archivedAt,
+                IsActive = habit.isActive,
+                RequireApproval = habit.requireApproval
+            });
+        }
+    }
+
+    private static void RebuildCompletions(ChildProgress state)
+    {
+        state.completions.Clear();
+        foreach (HabitLogModel log in state.logs)
+        {
+            if (log == null || string.IsNullOrEmpty(log.habitId) ||
+                !DateTime.TryParseExact(log.dateKey, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out DateTime date))
+                continue;
+            state.completions.Add(new HabitCompletion
+            {
+                HabitId = log.habitId,
+                Date = date,
+                IsCompleted = log.isCompleted,
+                IsApproved = log.isApproved,
+                RequiresApprovalAtCompletion = log.requiresApprovalAtCompletion
+            });
+        }
+    }
+
+    private static DateTime? ParseBusinessDate(string value)
+    {
+        return DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out DateTime date) ? date.Date : (DateTime?)null;
+    }
+
     private bool IsCurrentSession(int version)
     {
-        return this != null && isActiveAndEnabled && version == sessionVersion;
+        if (this == null || !isActiveAndEnabled || version != sessionVersion)
+            return false;
+        if (loadedSessionGeneration < 0)
+            return true;
+        FirebaseManager manager = FirebaseManager.Instance;
+        return manager != null && manager.SessionGeneration == loadedSessionGeneration
+            && manager.GetCurrentParentId() == loadedParentId;
     }
 
     private bool IsCurrentChild(ChildProgress state, int version)
@@ -387,17 +548,23 @@ public class HabitLogUI : MonoBehaviour
         bool loading = !hasChildren || ordered.Any(state => !state.hasHabits || !state.hasLogs);
         string status = failed ? "Chưa tải được tiến độ. Chạm Thử lại để kết nối."
             : loading ? "Đang tải dữ liệu tuần..."
-            : ordered.Count == 0 ? "Chưa có trẻ trong danh sách." : null;
+                : ordered.Count == 0 ? "Chưa có trẻ trong danh sách." : null;
         int completed = days.Sum(day => day.Sum(point => point.completed));
         int total = days.Sum(day => day.Sum(point => point.total));
+        bool hasUnknownCoverage = days.Any(day => day.Any(point => point.hasUnknownCoverage));
+        bool hasConflictingRecords = days.Any(day => day.Any(point => point.hasConflictingRecords));
         float ratio = total > 0 ? (float)completed / total : 0f;
+        string qualitySuffix = (hasUnknownCoverage ? " · lịch sử chưa đầy đủ" : string.Empty)
+            + (hasConflictingRecords ? " · có log trùng cần kiểm tra" : string.Empty);
         if (periodLabelText != null)
             periodLabelText.text = $"{weekStart:dd/MM} – {weekStart.AddDays(6):dd/MM/yyyy}";
         if (summaryText != null)
-            summaryText.text = completionRateText != null ? (loading || failed ? "— / —" : $"{completed} / {total}")
-                : status ?? $"{completed}/{total} nhiệm vụ hoàn thành";
+            summaryText.text = completionRateText != null
+                ? (loading || failed ? "— / —" : $"{completed} / {total}{qualitySuffix}")
+                : status ?? $"{completed}/{total} nhiệm vụ hoàn thành{qualitySuffix}";
         if (completionRateText != null)
-            completionRateText.text = loading || failed ? "—" : $"{ratio * 100f:0}%";
+            completionRateText.text = loading || failed || hasUnknownCoverage || hasConflictingRecords
+                ? "—" : $"{ratio * 100f:0}%";
         if (childrenCountText != null)
             childrenCountText.text = hasChildren ? ordered.Count.ToString() : "—";
         float displayedRatio = loading || failed ? 0f : ratio;
@@ -407,7 +574,10 @@ public class HabitLogUI : MonoBehaviour
             weeklyProgressFill.DOFillAmount(displayedRatio, animationDuration).SetUpdate(true);
         }
         if (todayButton != null)
-            todayButton.interactable = weekStart != GetWeekStart(DateTime.Today) || selectedDate != DateTime.Today;
+        {
+            DateTime businessToday = HabitLog.GetBusinessDate(DateTimeOffset.UtcNow);
+            todayButton.interactable = weekStart != GetWeekStart(businessToday) || selectedDate != businessToday;
+        }
         if (retryButton != null)
             retryButton.gameObject.SetActive(failed);
         if (statusText != null)
@@ -420,7 +590,12 @@ public class HabitLogUI : MonoBehaviour
         if (detailCountText != null)
         {
             List<ProgressPoint> selected = days[(selectedDate - weekStart).Days];
-            detailCountText.text = loading || failed ? "Đang đồng bộ" : $"{selected.Sum(point => point.completed)}/{selected.Sum(point => point.total)} đã xong";
+            bool selectedUnknown = selected.Any(point => point.hasUnknownCoverage);
+            bool selectedConflict = selected.Any(point => point.hasConflictingRecords);
+            string selectedSuffix = (selectedUnknown ? " + ?" : string.Empty)
+                + (selectedConflict ? " · cần đối soát" : string.Empty);
+            detailCountText.text = loading || failed ? "Đang đồng bộ"
+                : $"{selected.Sum(point => point.completed)}/{selected.Sum(point => point.total)} đã xong{selectedSuffix}";
         }
         if (detailText != null)
             detailText.text = status ?? BuildDetailText(ordered);
@@ -438,33 +613,87 @@ public class HabitLogUI : MonoBehaviour
 
     private static ProgressPoint CreatePoint(ChildProgress state, DateTime date)
     {
-        ProgressPoint point = new ProgressPoint { owner = state };
-        foreach (HabitModel habit in state.habits)
+        HabitProgress progress = HabitAnalytics.Calculate(
+            date.Date, date.Date.AddDays(1), state.occurrences, state.completions);
+        return new ProgressPoint
         {
-            if (!IsHabitScheduledForDate(habit, date))
-                continue;
-            ++point.total;
-            if (GetLog(state, habit.id, date)?.isCompleted == true)
-                ++point.completed;
+            owner = state,
+            total = progress.Total,
+            completed = progress.Completed,
+            hasUnknownCoverage = progress.HasUnknownCoverage,
+            hasConflictingRecords = progress.HasConflictingRecords
+        };
+    }
+
+    private static string GetPointLabel(ProgressPoint point)
+    {
+        string value = point.total > 0 ? $"{point.completed}/{point.total}"
+            : point.hasUnknownCoverage ? "?" : "—";
+        if (point.hasUnknownCoverage)
+        {
+            if (point.total > 0)
+                value += " + ?";
         }
-        return point;
+        if (point.hasConflictingRecords)
+            value += " !";
+        return value;
     }
 
-    private static bool IsHabitScheduledForDate(HabitModel habit, DateTime date)
+    private static List<HabitDayDetail> GetDayDetails(ChildProgress state, DateTime date)
     {
-        if (!habit.isActive)
-            return false;
-        int weekday = date.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)date.DayOfWeek;
-        return habit.repeatDays == null || habit.repeatDays.Count == 0
-            || habit.repeatDays.Any(day => (day == 0 ? 7 : day) == weekday);
+        var result = new List<HabitDayDetail>();
+        string dateKey = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        foreach (HabitModel habit in state.habits
+                     .OrderBy(item => item.timeTarget, StringComparer.Ordinal)
+                     .ThenBy(item => item.title, StringComparer.Ordinal))
+        {
+            if (habit == null || string.IsNullOrEmpty(habit.id))
+                continue;
+            HabitOccurrence occurrence = state.occurrences.FirstOrDefault(item => item.HabitId == habit.id);
+            if (occurrence == null)
+                continue;
+            HabitProgress progress = HabitAnalytics.Calculate(
+                date.Date,
+                date.Date.AddDays(1),
+                new[] { occurrence },
+                state.completions.Where(completion => completion.HabitId == habit.id));
+            if (progress.Total == 0 && !progress.HasUnknownCoverage)
+                continue;
+            result.Add(new HabitDayDetail
+            {
+                habit = habit,
+                progress = progress,
+                log = GetDisplayLog(state, habit.id, dateKey)
+            });
+        }
+        return result;
     }
 
-    private static string GetLogKey(string habitId, string dateKey) => habitId + "/" + dateKey;
-
-    private static HabitLogModel GetLog(ChildProgress state, string habitId, DateTime date)
+    private static HabitLogModel GetDisplayLog(ChildProgress state, string habitId, string dateKey)
     {
-        state.logs.TryGetValue(GetLogKey(habitId, date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), out HabitLogModel log);
-        return log;
+        return state.logs
+            .Where(log => log != null && log.habitId == habitId && log.dateKey == dateKey)
+            .OrderByDescending(log => log.logId == HabitLog.GetDailyLogDocumentId(habitId, dateKey))
+            .ThenByDescending(log => log.rewardGranted)
+            .ThenByDescending(log => log.isApproved)
+            .ThenByDescending(log => log.completedAt)
+            .ThenBy(log => log.logId, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static bool RequiresApproval(HabitModel habit, HabitLogModel log)
+    {
+        return log != null && log.requiresApprovalAtCompletion.HasValue
+            ? log.requiresApprovalAtCompletion.Value
+            : habit.requireApproval;
+    }
+
+    private static string GetCompletionTimeLabel(HabitLogModel log)
+    {
+        if (log == null || !log.completedAt.HasValue)
+            return "Đã hoàn thành (chưa có thời gian)";
+        DateTime utcTime = DateTime.SpecifyKind(log.completedAt.Value.ToDateTime(), DateTimeKind.Utc);
+        return $"Hoàn thành lúc {utcTime.AddHours(7).ToString("HH:mm:ss", CultureInfo.InvariantCulture)}";
     }
 
     private string BuildDetailText(List<ChildProgress> ordered)
@@ -473,22 +702,28 @@ public class HabitLogUI : MonoBehaviour
         foreach (ChildProgress state in ordered)
         {
             ProgressPoint point = CreatePoint(state, selectedDate);
+            string quality = (point.hasUnknownCoverage ? " · lịch sử chưa đầy đủ" : string.Empty)
+                + (point.hasConflictingRecords ? " · log trùng cần đối soát" : string.Empty);
             text.Append($"\n\n<color=#{ColorUtility.ToHtmlStringRGB(GetSeriesColor(state.child.childId))}>");
-            text.Append($"<b>{EscapeText(GetChildName(state.child))}</b></color> — {point.completed}/{point.total}");
-            List<HabitModel> scheduled = state.habits.Where(habit => IsHabitScheduledForDate(habit, selectedDate))
-                .OrderBy(habit => habit.timeTarget, StringComparer.Ordinal).ThenBy(habit => habit.title, StringComparer.Ordinal).ToList();
-            if (scheduled.Count == 0)
+            text.Append($"<b>{EscapeText(GetChildName(state.child))}</b></color> — {point.completed}/{point.total}{quality}");
+            List<HabitDayDetail> details = GetDayDetails(state, selectedDate);
+            if (details.Count == 0)
                 text.Append("\nChưa có nhiệm vụ được lên lịch.");
-            foreach (HabitModel habit in scheduled)
+            foreach (HabitDayDetail detail in details)
             {
-                HabitLogModel log = GetLog(state, habit.id, selectedDate);
+                HabitModel habit = detail.habit;
+                HabitLogModel log = detail.log;
                 text.Append($"\n• {EscapeText(habit.title)}: ");
-                if (log?.isCompleted == true)
+                if (detail.progress.HasConflictingRecords)
+                    text.Append("Log trùng cần đối soát");
+                else if (detail.progress.HasUnknownCoverage && detail.progress.Total == 0)
+                    text.Append(log?.isCompleted == true
+                        ? "Đã ghi nhận, nhưng lịch sử chưa đủ để xác định nhiệm vụ"
+                        : "Chưa đủ dữ liệu lịch sử để xác định nhiệm vụ");
+                else if (log?.isCompleted == true)
                 {
-                    text.Append(log.completedAt.Equals(default(Timestamp))
-                        ? "Đã hoàn thành (chưa có thời gian)"
-                        : $"Hoàn thành lúc {log.completedAt.ToDateTime().ToLocalTime():HH:mm:ss}");
-                    if (habit.requireApproval && !log.isApproved)
+                    text.Append(GetCompletionTimeLabel(log));
+                    if (RequiresApproval(habit, log) && !log.isApproved)
                         text.Append(" · Chờ xác nhận");
                 }
                 else
@@ -528,18 +763,19 @@ public class HabitLogUI : MonoBehaviour
             {
                 Color color = GetSeriesColor(state.child.childId);
                 ProgressPoint point = CreatePoint(state, selectedDate);
+                string quality = (point.hasUnknownCoverage ? "  ·  lịch sử chưa đầy đủ" : string.Empty)
+                    + (point.hasConflictingRecords ? "  ·  log trùng cần đối soát" : string.Empty);
                 TMP_Text name = NewText("ChildName", detailContentRoot, TextAlignmentOptions.MidlineLeft);
                 name.fontSize = 27f;
                 name.fontStyle = FontStyles.Bold;
                 name.overflowMode = TextOverflowModes.Ellipsis;
                 name.textWrappingMode = TextWrappingModes.NoWrap;
                 name.color = color;
-                name.text = $"{EscapeText(GetChildName(state.child))}  <size=22><color=#789089>{point.completed}/{point.total} nhiệm vụ</color></size>";
+                name.text = $"{EscapeText(GetChildName(state.child))}  <size=22><color=#789089>{point.completed}/{point.total} nhiệm vụ{quality}</color></size>";
                 PlaceTop(name.rectTransform, 8f, y, width - 16f, 44f);
                 y += 50f;
-                List<HabitModel> scheduled = state.habits.Where(habit => IsHabitScheduledForDate(habit, selectedDate))
-                    .OrderBy(habit => habit.timeTarget, StringComparer.Ordinal).ThenBy(habit => habit.title, StringComparer.Ordinal).ToList();
-                if (scheduled.Count == 0)
+                List<HabitDayDetail> details = GetDayDetails(state, selectedDate);
+                if (details.Count == 0)
                 {
                     TMP_Text empty = NewText("NoTasks", detailContentRoot, TextAlignmentOptions.MidlineLeft);
                     empty.text = "Ngày này chưa có nhiệm vụ. Cùng con nghỉ ngơi nhé!";
@@ -547,12 +783,16 @@ public class HabitLogUI : MonoBehaviour
                     PlaceTop(empty.rectTransform, 8f, y, width - 16f, 64f);
                     y += 72f;
                 }
-                foreach (HabitModel habit in scheduled)
+                foreach (HabitDayDetail detail in details)
                 {
-                    HabitLogModel log = GetLog(state, habit.id, selectedDate);
-                    bool completed = log?.isCompleted == true;
-                    bool pending = completed && habit.requireApproval && !log.isApproved;
-                    Color stateColor = pending ? new Color(0.63f, 0.42f, 0.12f)
+                    HabitModel habit = detail.habit;
+                    HabitLogModel log = detail.log;
+                    bool recordedCompleted = log?.isCompleted == true;
+                    bool completed = detail.progress.Completed > 0;
+                    bool pending = recordedCompleted && RequiresApproval(habit, log) && !log.isApproved;
+                    bool conflict = detail.progress.HasConflictingRecords;
+                    bool unknown = detail.progress.HasUnknownCoverage && detail.progress.Total == 0;
+                    Color stateColor = conflict || pending ? new Color(0.63f, 0.42f, 0.12f)
                         : completed ? new Color(0.14f, 0.5f, 0.38f) : new Color(0.49f, 0.55f, 0.53f);
                     RectTransform row = NewRect("Task_" + habit.id, detailContentRoot);
                     PlaceTop(row, 0f, y, width, 88f);
@@ -560,7 +800,9 @@ public class HabitLogUI : MonoBehaviour
                     background.sprite = roundedSprite;
                     background.type = Image.Type.Sliced;
                     background.pixelsPerUnitMultiplier = 0.5f;
-                    background.color = completed ? new Color(0.91f, 0.97f, 0.92f) : new Color(0.96f, 0.96f, 0.92f);
+                    background.color = completed ? new Color(0.91f, 0.97f, 0.92f)
+                        : pending || conflict ? new Color(1f, 0.96f, 0.86f)
+                        : new Color(0.96f, 0.96f, 0.92f);
                     background.raycastTarget = false;
                     TMP_Text title = NewText("TaskTitle", row, TextAlignmentOptions.MidlineLeft);
                     title.text = EscapeText(habit.title);
@@ -570,7 +812,10 @@ public class HabitLogUI : MonoBehaviour
                     title.textWrappingMode = TextWrappingModes.NoWrap;
                     PlaceTop(title.rectTransform, 20f, 8f, width - 250f, 34f);
                     TMP_Text stateLabel = NewText("TaskState", row, TextAlignmentOptions.MidlineLeft);
-                    stateLabel.text = pending ? "Chờ phụ huynh xác nhận" : completed ? "Đã hoàn thành" : "Chưa hoàn thành";
+                    stateLabel.text = conflict ? "Log trùng cần đối soát"
+                        : unknown ? "Chưa đủ dữ liệu lịch sử"
+                        : pending ? "Chờ phụ huynh xác nhận"
+                        : completed ? "Đã hoàn thành" : "Chưa hoàn thành";
                     stateLabel.fontSize = 21f;
                     stateLabel.color = stateColor;
                     PlaceTop(stateLabel.rectTransform, 20f, 45f, width - 250f, 28f);
@@ -578,8 +823,11 @@ public class HabitLogUI : MonoBehaviour
                     time.fontSize = 27f;
                     time.fontStyle = FontStyles.Bold;
                     time.color = stateColor;
-                    time.text = completed && !log.completedAt.Equals(default(Timestamp))
-                        ? log.completedAt.ToDateTime().ToLocalTime().ToString("HH:mm:ss") : completed ? "Đã xong" : "—";
+                    time.text = conflict ? "?"
+                        : recordedCompleted && log.completedAt.HasValue
+                            ? DateTime.SpecifyKind(log.completedAt.Value.ToDateTime(), DateTimeKind.Utc)
+                                .AddHours(7).ToString("HH:mm:ss", CultureInfo.InvariantCulture)
+                            : completed ? "Đã xong" : recordedCompleted ? "Đã ghi nhận" : "—";
                     PlaceTop(time.rectTransform, width - 214f, 22f, 190f, 42f);
                     y += 98f;
                 }
@@ -669,7 +917,8 @@ public class HabitLogUI : MonoBehaviour
                 }
                 Place(bar.value.rectTransform, 6f + index * slotWidth, target.y + 66f, slotWidth, 28f);
                 bar.value.text = point.owner.hasHabits && point.owner.hasLogs && !point.owner.syncFailed
-                    ? $"{point.completed}/{point.total}" : "…";
+                    ? GetPointLabel(point)
+                    : "…";
             }
         }
     }

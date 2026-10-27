@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Item 2
   m_EditorClassIdentifier: Assembly-CSharp::Item
   itemId: 9ccbdc7702b28884688df17190667e9b
-  itemName: "K\xEDnh d\xE2m"
+  itemName: "K\xEDnh r\xE2m"
   itemIcon: {fileID: -6973694972343930948, guid: 7194bf443b29295428344738ade29a94, type: 3}
   itemType: 0
   equipmentSprite: {fileID: -6973694972343930948, guid: 7194bf443b29295428344738ade29a94, type: 3}

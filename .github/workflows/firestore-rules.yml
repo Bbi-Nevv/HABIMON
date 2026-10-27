@@ -1,0 +1,53 @@
+name: Firestore Rules
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/firestore-rules.yml'
+      - 'firebase.json'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tests/firestore-rules/**'
+  push:
+    paths:
+      - '.github/workflows/firestore-rules.yml'
+      - 'firebase.json'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tests/firestore-rules/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Set up Java for Firestore Emulator
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install test dependencies
+        run: npm ci
+
+      - name: Test Firestore Rules in local emulator
+        run: npm run test:firestore-rules
+
+      - name: Audit locked npm dependencies
+        run: npm audit --audit-level=moderate

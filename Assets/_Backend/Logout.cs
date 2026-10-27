@@ -7,22 +7,31 @@ public class Logout : MonoBehaviour
     [SerializeField] private Button btnLogout;
     void OnEnable()
     {
-        btnLogout.onClick.AddListener(() => 
-        {
-            FirebaseManager.Instance.LogoutParent();
-            if (FirebaseManager.Instance.CurrentUser == null)
-            {
-                Debug.Log("User logged out successfully.");
-                SceneManager.LoadScene("Menu");
-            }
-            else
-            {
-                Debug.LogWarning("Logout failed. User is still logged in.");
-            }
-        });
+        if (btnLogout != null)
+            btnLogout.onClick.AddListener(OnLogoutClicked);
     }
-    void OnDestroy()
+
+    void OnDisable()
     {
-        btnLogout.onClick.RemoveAllListeners();
+        if (btnLogout != null)
+            btnLogout.onClick.RemoveListener(OnLogoutClicked);
+    }
+
+    private void OnLogoutClicked()
+    {
+        FirebaseManager manager = FirebaseManager.Instance;
+        if (manager == null)
+            return;
+
+        manager.LogoutParent();
+        if (manager.CurrentUser == null)
+        {
+            Debug.Log("User logged out successfully.");
+            SceneManager.LoadScene("Menu");
+        }
+        else
+        {
+            Debug.LogWarning("Logout failed. User is still logged in.");
+        }
     }
 }

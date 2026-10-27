@@ -12,6 +12,8 @@ public class SaveEquipment : MonoBehaviour
     [SerializeField] private List<Accessory> accessoryDisplays = new List<Accessory>();
     [Tooltip("Items that can be restored in addition to Inventory.Items.")]
     [SerializeField] private List<Item> additionalItems = new List<Item>();
+    [Tooltip("Items that were free in an earlier build. Ownership is migrated only when one is saved as equipped.")]
+    [SerializeField] private List<Item> legacyStartingItems = new List<Item>();
     [Tooltip("Use a different prefix for each independent monster/save profile.")]
     [SerializeField] private string playerPrefsPrefix = DefaultPrefix;
 
@@ -38,6 +40,7 @@ public class SaveEquipment : MonoBehaviour
     private void Start()
     {
         // All active Accessory.Awake calls have completed before loading saved data.
+        MigrateLegacyEquippedItems();
         LoadEquipment();
         Subscribe();
         started = true;
@@ -105,6 +108,37 @@ public class SaveEquipment : MonoBehaviour
         {
             isApplying = false;
         }
+    }
+
+    private void MigrateLegacyEquippedItems()
+    {
+        if (inventory == null || legacyStartingItems == null || legacyStartingItems.Count == 0)
+            return;
+
+        bool migrated = false;
+        foreach (Item item in legacyStartingItems)
+        {
+            if (item == null || string.IsNullOrEmpty(item.ItemId))
+                continue;
+
+            // Old builds persisted the chosen item by equipment slot, but did not
+            // persist ownership for items that had been free in the starting list.
+            if (!PlayerPrefs.HasKey(GetKey(item.ItemType)) ||
+                !string.Equals(PlayerPrefs.GetString(GetKey(item.ItemType), string.Empty),
+                    item.ItemId, StringComparison.Ordinal))
+                continue;
+
+            string unlockKey = "Habimon.Inventory.Unlocked." + item.ItemId;
+            if (PlayerPrefs.GetInt(unlockKey, 0) == 1)
+                continue;
+
+            PlayerPrefs.SetInt(unlockKey, 1);
+            inventory.RegisterUnlockableItem(item);
+            migrated = true;
+        }
+
+        if (migrated)
+            PlayerPrefs.Save();
     }
 
     private void BuildItemLookup()

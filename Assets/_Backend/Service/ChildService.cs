@@ -1,4 +1,5 @@
 using Firebase.Firestore;
+using HABIMON.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -85,6 +86,7 @@ public class ChildService
             {
                 { "name", name.Trim() },
                 { "age", age },
+                { "ageAsOf", Timestamp.GetCurrentTimestamp() },
                 { "gender", gender }
             });
 
@@ -112,6 +114,9 @@ public class ChildService
                 .Collection("children")
                 .Document(childId);
 
+            foreach (string collectionName in new[] { "habits", "habit_logs", "habimon", "rewards" })
+                await DeleteCollectionContentsAsync(childRef.Collection(collectionName));
+
             await childRef.DeleteAsync();
             return (true, "Đã xóa trẻ.");
         }
@@ -122,21 +127,34 @@ public class ChildService
         }
     }
 
-    public async Task<(bool success, string message, string childId)> AddChildAsync(string parentId, string name, int age, int gender)
+    private async Task DeleteCollectionContentsAsync(CollectionReference collection)
     {
-        if (string.IsNullOrEmpty(parentId))
-            return (false, "Không xác định được phụ huynh đang đăng nhập.", string.Empty);
+        QuerySnapshot snapshot = await collection.GetSnapshotAsync();
+        List<DocumentSnapshot> documents = snapshot.Documents.ToList();
+        const int batchSize = 400;
+        for (int start = 0; start < documents.Count; start += batchSize)
+        {
+            WriteBatch batch = db.StartBatch();
+            int end = Math.Min(start + batchSize, documents.Count);
+            for (int index = start; index < end; index++)
+                batch.Delete(documents[index].Reference);
+            await batch.CommitAsync();
+        }
+    }
 
-        if (string.IsNullOrWhiteSpace(name))
-            return (false, "Vui lòng nhập tên trẻ.", string.Empty);
+    public async Task<(bool success, string message, string childId)> AddChildAsync(PendingChildCreate pending)
+    {
+        if (pending == null)
+            return (false, "Thiếu mã thao tác thêm trẻ.", string.Empty);
 
-        if (age <= 0)
-            return (false, "Tuổi phải lớn hơn 0.", string.Empty);
+        string parentId = pending.Scope.ParentId;
+        string childId = pending.OperationId;
+        string name = pending.Name;
+        int age = pending.Age;
+        int gender = pending.Gender;
+        if (!Guid.TryParseExact(childId, "N", out _))
+            return (false, "Mã thao tác thêm trẻ không hợp lệ.", string.Empty);
 
-        if (gender != 0 && gender != 1)
-            return (false, "Vui lòng chọn giới tính.", string.Empty);
-
-        string childId = Guid.NewGuid().ToString();
         DocumentReference childRef = db.Collection("users")
             .Document(parentId)
             .Collection("children")
@@ -147,15 +165,64 @@ public class ChildService
             childId = childId,
             name = name.Trim(),
             age = age,
+            ageAsOf = Timestamp.GetCurrentTimestamp(),
             gender = gender,
             gold = 0,
             totalExp = 0,
             createdAt = Timestamp.GetCurrentTimestamp()
         };
 
+        DocumentReference petRef = childRef.Collection("habimon").Document("status");
+        HabimonModel defaultPet = new HabimonModel
+        {
+            petType = "fire_dragon",
+            petName = "Rồng Lửa",
+            level = 1,
+            currentExp = 0,
+            maxExp = 100,
+            stage = "Egg",
+            health = 100,
+            hunger = 100,
+            happiness = 100
+        };
+
         try
         {
-            await childRef.SetAsync(child);
+            bool operationMatched = false;
+            bool operationConflicted = false;
+            await db.RunTransactionAsync(async transaction =>
+            {
+                DocumentSnapshot childSnapshot = await transaction.GetSnapshotAsync(childRef);
+                DocumentSnapshot petSnapshot = await transaction.GetSnapshotAsync(petRef);
+
+                if (childSnapshot.Exists)
+                {
+                    ChildModel existingChild = childSnapshot.ConvertTo<ChildModel>();
+                    operationMatched = existingChild != null &&
+                        string.Equals(existingChild.name, child.name, StringComparison.Ordinal) &&
+                        existingChild.age == child.age &&
+                        existingChild.gender == child.gender &&
+                        petSnapshot.Exists;
+                    operationConflicted = !operationMatched;
+                    return;
+                }
+
+                if (petSnapshot.Exists)
+                {
+                    operationConflicted = true;
+                    return;
+                }
+
+                transaction.Set(childRef, child);
+                transaction.Set(petRef, defaultPet);
+                operationMatched = true;
+            });
+
+            if (!operationMatched)
+                return (false, operationConflicted
+                    ? "Mã thao tác thêm trẻ đã được dùng với dữ liệu khác hoặc hồ sơ chưa hoàn chỉnh."
+                    : "Không thể xác nhận thao tác thêm trẻ.", string.Empty);
+
             return (true, "Đã thêm trẻ.", childId);
         }
         catch (Exception ex)

@@ -1,0 +1,202 @@
+using System;
+using System.Collections.Generic;
+using HABIMON.Core;
+
+namespace HABIMON.Chatbot
+{
+    public class ChatbotContextSource
+    {
+        public string capturedAt;
+        public string localDate;
+        public string timeZone;
+        public ChatbotChildSource child;
+        public ChatPetContext pet;
+        public ChatbotHabitSource[] habits;
+        public ChatbotHabitLogSource[] logs;
+        public ChatbotRewardSource[] rewards;
+    }
+
+    public class ChatbotChildSource
+    {
+        public string name;
+        public int age;
+        public int genderCode;
+    }
+
+    public class ChatbotHabitSource
+    {
+        public string documentId;
+        public string title;
+        public string description;
+        public string scheduleKind;
+        public string scheduleValue;
+        public string timeTarget;
+        public int[] repeatDays;
+        public int rewardGold;
+        public int rewardExp;
+        public bool requireApproval;
+        public bool isActive;
+    }
+
+    public class ChatbotHabitLogSource
+    {
+        public string habitId;
+        public string dateKey;
+        public string completedAt;
+        public bool isCompleted;
+        public bool isApproved;
+    }
+
+    public class ChatbotRewardSource
+    {
+        public string name;
+        public string itemType;
+        public int cost;
+        public bool isUnlocked;
+    }
+
+    public static class ChatbotContextAdapter
+    {
+        public static ChatbotContext Build(ChatbotContextSource source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+
+            ChatChildContext child = BuildChild(source.child);
+            var result = new ChatbotContext
+            {
+                capturedAt = source.capturedAt,
+                localDate = source.localDate,
+                timeZone = source.timeZone,
+                child = child,
+                pet = child == null ? null : source.pet,
+                habits = child == null ? null : BuildHabits(source.habits, source.logs),
+                rewards = child == null ? null : BuildRewards(source.rewards)
+            };
+            return result;
+        }
+
+        private static ChatChildContext BuildChild(ChatbotChildSource source)
+        {
+            if (source == null || string.IsNullOrWhiteSpace(source.name) || source.age <= 0 ||
+                string.Equals(source.name.Trim(), "Unnull", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            string gender = source.genderCode == 0 ? "female" : source.genderCode == 1 ? "male" : null;
+            return new ChatChildContext
+            {
+                name = source.name.Trim(),
+                age = source.age,
+                gender = gender
+            };
+        }
+
+        private static ChatHabitContext[] BuildHabits(
+            ChatbotHabitSource[] habits,
+            ChatbotHabitLogSource[] logs)
+        {
+            if (habits == null)
+                return null;
+
+            var result = new List<ChatHabitContext>(habits.Length);
+            foreach (ChatbotHabitSource habit in habits)
+            {
+                if (habit == null)
+                    continue;
+
+                result.Add(new ChatHabitContext
+                {
+                    title = habit.title,
+                    description = habit.description,
+                    schedule = BuildSchedule(habit.scheduleKind, habit.scheduleValue, habit.timeTarget),
+                    repeatDays = NormalizeRepeatDays(habit.repeatDays),
+                    rewardGold = habit.rewardGold,
+                    rewardExp = habit.rewardExp,
+                    requireApproval = habit.requireApproval,
+                    isActive = habit.isActive,
+                    logs = BuildLogsForHabit(habit.documentId, logs)
+                });
+            }
+
+            return result.ToArray();
+        }
+
+        private static int[] NormalizeRepeatDays(int[] repeatDays)
+        {
+            if (repeatDays == null)
+                return null;
+
+            // Legacy HABIMON data used 0 for Sunday; the assistant contract uses ISO 1..7.
+            var normalized = new int[repeatDays.Length];
+            for (int index = 0; index < repeatDays.Length; index++)
+                normalized[index] = repeatDays[index] == 0 ? 7 : repeatDays[index];
+            return normalized;
+        }
+
+        private static ChatHabitScheduleContext BuildSchedule(string scheduleKind, string scheduleValue, string timeTarget)
+        {
+            if (string.IsNullOrWhiteSpace(scheduleKind) && string.IsNullOrWhiteSpace(scheduleValue) &&
+                string.IsNullOrWhiteSpace(timeTarget))
+                return null;
+
+            HabitSchedule schedule = HabitSchedule.FromStorage(scheduleKind, scheduleValue, timeTarget);
+            if (string.IsNullOrWhiteSpace(schedule.Value))
+                return null;
+
+            return new ChatHabitScheduleContext
+            {
+                kind = schedule.Kind,
+                value = schedule.Value
+            };
+        }
+
+        private static ChatHabitLogContext[] BuildLogsForHabit(
+            string habitDocumentId,
+            ChatbotHabitLogSource[] logs)
+        {
+            if (logs == null)
+                return null;
+
+            var result = new List<ChatHabitLogContext>();
+            foreach (ChatbotHabitLogSource log in logs)
+            {
+                if (log == null || string.IsNullOrEmpty(habitDocumentId) ||
+                    !string.Equals(log.habitId, habitDocumentId, StringComparison.Ordinal))
+                    continue;
+
+                result.Add(new ChatHabitLogContext
+                {
+                    dateKey = log.dateKey,
+                    completedAt = log.completedAt,
+                    isCompleted = log.isCompleted,
+                    isApproved = log.isApproved
+                });
+            }
+
+            return result.ToArray();
+        }
+
+        private static ChatRewardContext[] BuildRewards(ChatbotRewardSource[] rewards)
+        {
+            if (rewards == null)
+                return null;
+
+            var result = new List<ChatRewardContext>(rewards.Length);
+            foreach (ChatbotRewardSource reward in rewards)
+            {
+                if (reward == null)
+                    continue;
+
+                result.Add(new ChatRewardContext
+                {
+                    name = reward.name,
+                    itemType = reward.itemType,
+                    cost = reward.cost,
+                    isUnlocked = reward.isUnlocked
+                });
+            }
+
+            return result.ToArray();
+        }
+    }
+}

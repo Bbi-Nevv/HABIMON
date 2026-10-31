@@ -1,0 +1,35 @@
+// Interim owner-scoped containment for the mobile app's current document paths.
+// It isolates Firebase Auth UIDs, but cannot distinguish Parent and Child modes
+// because both use the same Auth identity. This is not final authorization for
+// parent-only PIN, deletion, approval, or reward operations.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(parentId) {
+      return request.auth != null && request.auth.uid == parentId;
+    }
+
+    function parentDocumentExists(parentId) {
+      return exists(/databases/$(database)/documents/users/$(parentId));
+    }
+
+    function doesNotReintroduceLegacyPasswordVerifiers() {
+      return !request.resource.data.diff(resource.data).addedKeys()
+          .hasAny(['passwordHash', 'passwordSalt']) &&
+        !request.resource.data.diff(resource.data).changedKeys()
+          .hasAny(['passwordHash', 'passwordSalt']);
+    }
+
+    match /users/{parentId} {
+      allow create: if isOwner(parentId) &&
+        !request.resource.data.keys().hasAny(['passwordHash', 'passwordSalt']);
+      allow read: if isOwner(parentId);
+      allow update: if isOwner(parentId) &&
+        doesNotReintroduceLegacyPasswordVerifiers();
+
+      match /{collection}/{document=**} {
+        allow read, write: if isOwner(parentId) && parentDocumentExists(parentId);
+      }
+    }
+  }
+}

@@ -24,8 +24,6 @@ public class ParentModel
 {
     [FirestoreDocumentId] public string parentId { get; set; }
     [FirestoreProperty] public string email { get; set; }
-    [FirestoreProperty] public string passwordHash { get; set; }
-    [FirestoreProperty] public string passwordSalt { get; set; }
     [FirestoreProperty] public string pincode { get; set; }
     [FirestoreProperty] public Timestamp createdAt { get; set; }
 

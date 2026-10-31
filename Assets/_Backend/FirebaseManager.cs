@@ -134,11 +134,15 @@ public class FirebaseManager : MonoBehaviour
     {
         if (!IsInitialized) return (false, "Hệ thống chưa sẵn sàng!");
 
+        string stage = "Tạo tài khoản Firebase Auth";
+        string documentPath = string.Empty;
+        bool authAccountCreated = false;
         try
         {
             // 1. Tạo tài khoản trên Firebase Auth
             AuthResult result = await auth.CreateUserWithEmailAndPasswordAsync(email, password);
             FirebaseUser newUser = result.User;
+            authAccountCreated = true;
             string parentId = newUser.UserId;
             if (parentId != null)
             {
@@ -151,19 +155,16 @@ public class FirebaseManager : MonoBehaviour
             }
 
             // 2. Tạo thông tin Phụ huynh trên Firestore
-            // Lưu password dưới dạng hash + salt thay vì plain text để tránh rò rỉ dữ liệu nhạy cảm.
-            string passwordSalt = GenerateSalt();
-            string passwordHash = HashPassword(password, passwordSalt);
-
+            // Firebase Auth quản lý mật khẩu; Firestore chỉ lưu thông tin hồ sơ.
             DocumentReference parentRef = db.Collection("users").Document(parentId);
             ParentModel parentData = new ParentModel
             {
                 email = email.Trim(),
-                passwordHash = passwordHash,
-                passwordSalt = passwordSalt,
                 pincode = HashPin("0000"),
                 createdAt = Timestamp.GetCurrentTimestamp()
             };
+            stage = "Tạo hồ sơ phụ huynh";
+            documentPath = parentRef.Path;
             await parentRef.SetAsync(parentData);
 
             // 3. Tạo sẵn 1 em bé mặc định + Thú cưng ban đầu cho bé
@@ -179,8 +180,9 @@ public class FirebaseManager : MonoBehaviour
                 totalExp = 0,
                 createdAt = Timestamp.GetCurrentTimestamp()
             };
+            stage = "Tạo hồ sơ trẻ";
+            documentPath = childRef.Path;
             await childRef.SetAsync(childData);
-            currentChildId = childId;
 
             // 4. Tạo Habimon mặc định cho bé
             DocumentReference petRef = childRef.Collection("habimon").Document("status");
@@ -196,6 +198,8 @@ public class FirebaseManager : MonoBehaviour
                 hunger = 100,
                 happiness = 100
             };
+            stage = "Tạo Habimon mặc định";
+            documentPath = petRef.Path;
             await petRef.SetAsync(defaultPet);
 
             // 5. Tạo 1 thói quen mẫu và 1 reward mẫu nếu cần
@@ -212,6 +216,8 @@ public class FirebaseManager : MonoBehaviour
                 requireApproval = true,
                 isActive = true
             };
+            stage = "Tạo thói quen mẫu";
+            documentPath = habitRef.Path;
             await habitRef.SetAsync(defaultHabit);
 
             DocumentReference rewardRef = childRef.Collection("rewards").Document("reward_01");
@@ -223,20 +229,38 @@ public class FirebaseManager : MonoBehaviour
                 isUnlocked = false,
                 createdAt = Timestamp.GetCurrentTimestamp()
             };
+            stage = "Tạo phần thưởng mẫu";
+            documentPath = rewardRef.Path;
             await rewardRef.SetAsync(defaultReward);
 
+            currentChildId = childId;
             return (true, "Đăng ký thành công!");
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"[Firebase Auth Error] {ex.Message}");
+            Debug.LogError($"[RegisterParent] Thất bại tại bước '{stage}'. " +
+                $"Project: {db.App.Options.ProjectId}; UID: {GetCurrentParentId()}; " +
+                $"Document: {documentPath}\n{ex}");
+
+            string accountStatus = authAccountCreated
+                ? "Tài khoản xác thực đã được tạo nhưng dữ liệu đăng ký chưa hoàn tất. "
+                : string.Empty;
+
+            if (ex is FirestoreException firestoreEx)
+            {
+                if (firestoreEx.ErrorCode == FirestoreError.PermissionDenied)
+                    return (false, accountStatus +
+                        "Firestore từ chối quyền lưu dữ liệu. Vui lòng kiểm tra Security Rules theo UID (xem Console để biết đường dẫn lỗi).");
+
+                return (false, accountStatus + $"Lỗi Firestore tại bước '{stage}' ({firestoreEx.ErrorCode}): {firestoreEx.Message}");
+            }
 
             if (ex is FirebaseException fbEx)
             {
-                return (false, $"Lỗi Firebase ({fbEx.ErrorCode}): {fbEx.Message}");
+                return (false, accountStatus + $"Lỗi Firebase tại bước '{stage}' ({fbEx.ErrorCode}): {fbEx.Message}");
             }
 
-            return (false, ex.Message);
+            return (false, accountStatus + $"Lỗi tại bước '{stage}': {ex.Message}");
         }
     }
     #endregion
@@ -256,45 +280,6 @@ public class FirebaseManager : MonoBehaviour
 
             return builder.ToString();
         }
-    }
-
-    public static string GenerateSalt()
-    {
-        byte[] saltBytes = new byte[16];
-        using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
-        {
-            rng.GetBytes(saltBytes);
-        }
-
-        return Convert.ToBase64String(saltBytes);
-    }
-
-    public static string HashPassword(string password, string salt)
-    {
-        if (string.IsNullOrEmpty(password))
-            return string.Empty;
-
-        string combined = password + salt;
-        using (SHA256 sha256 = SHA256.Create())
-        {
-            byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(combined));
-            StringBuilder builder = new StringBuilder(bytes.Length * 2);
-
-            foreach (byte value in bytes)
-            {
-                builder.Append(value.ToString("x2"));
-            }
-
-            return builder.ToString();
-        }
-    }
-
-    public static bool VerifyPassword(string password, string storedHash, string storedSalt)
-    {
-        if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
-            return false;
-
-        return HashPassword(password, storedSalt) == storedHash;
     }
 
     public async Task<bool> VerifyParentPinAsync(string pin)
@@ -334,14 +319,24 @@ public class FirebaseManager : MonoBehaviour
     {
         if (!IsInitialized) return (false, "Hệ thống chưa sẵn sàng!");
 
+        bool authenticated = false;
         try
         {
             AuthResult result = await auth.SignInWithEmailAndPasswordAsync(email, password);
+            authenticated = true;
+            // Hoàn thiện hồ sơ nếu lần đăng ký trước chỉ tạo được tài khoản Auth.
+            await EnsureParentDataAsync(result.User, result.User.Email);
             await ResolveCurrentChildIdAsync();
             return (true, "Đăng nhập thành công!");
         }
-        catch (System.Exception)
+        catch (System.Exception ex)
         {
+            if (authenticated)
+            {
+                Debug.LogError($"[LoginParent] Đã xác thực nhưng không thể hoàn thiện/đọc hồ sơ Firestore.\n{ex}");
+                return (false, "Đã xác thực tài khoản nhưng không thể tải hồ sơ. Vui lòng kiểm tra quyền Firestore.");
+            }
+
             Debug.LogWarning("Tài khoản chưa tồn tại");
             return (false, "Tài khoản chưa tồn tại");
         }
@@ -363,7 +358,7 @@ public class FirebaseManager : MonoBehaviour
 
             stage = "Tạo hồ sơ Google trên Firestore";
             FirebaseUser user = auth.CurrentUser;
-            await EnsureGoogleParentDataAsync(user, user?.Email);
+            await EnsureParentDataAsync(user, user?.Email);
 
             stage = "Đọc hồ sơ trẻ trên Firestore";
             await ResolveCurrentChildIdAsync();
@@ -379,10 +374,10 @@ public class FirebaseManager : MonoBehaviour
         }
     }
 
-    private async Task EnsureGoogleParentDataAsync(FirebaseUser user, string email)
+    private async Task EnsureParentDataAsync(FirebaseUser user, string email)
     {
         if (user == null)
-            throw new InvalidOperationException("Không lấy được Firebase user sau khi đăng nhập Google.");
+            throw new InvalidOperationException("Không lấy được Firebase user sau khi đăng nhập.");
 
         DocumentReference parentRef = db.Collection("users").Document(user.UserId);
         DocumentSnapshot parentSnapshot = await parentRef.GetSnapshotAsync();
@@ -391,8 +386,6 @@ public class FirebaseManager : MonoBehaviour
             ParentModel parentData = new ParentModel
             {
                 email = string.IsNullOrWhiteSpace(email) ? user.Email : email.Trim(),
-                passwordHash = string.Empty,
-                passwordSalt = string.Empty,
                 pincode = HashPin("0000"),
                 createdAt = Timestamp.GetCurrentTimestamp()
             };
